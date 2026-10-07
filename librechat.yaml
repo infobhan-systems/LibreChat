@@ -1058,7 +1058,8 @@ endpoints:
       models:
         default: [
           "mistral",
-          "qwen3.5:9b"
+          "qwen3.5:9b",
+          "hf.co/LiquidAI/LFM2.5-VL-3B-GGUF:Q4_0"
           ]
       # fetching list of models is supported but the `name` field must start
       # with `ollama` (case-insensitive), as it does in this example.

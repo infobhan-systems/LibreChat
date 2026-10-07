@@ -39,14 +39,15 @@ services:
 
 
 # # ADD OLLAMA
-# Pulls mistral and qwen3.5:9b into ./ollama. Each ollama command takes one model.
-# Mistral is loaded for the default chat. Qwen is downloaded and loads when selected.
-# The 6 GB GPU cannot hold both at once.
+# Pulls each model with its own ollama pull. Mistral is loaded for the default chat.
+# qwen3.5:9b and LFM2.5-VL-3B are downloaded and load when selected.
+# The 6 GB GPU cannot hold qwen3.5:9b together with another model.
  ollama:
    image: ollama/ollama:latest
    restart: always
    environment:
      OLLAMA_KEEP_ALIVE: "-1"
+     OLLAMA_MAX_LOADED_MODELS: "1"
    deploy:
      resources:
        reservations:
@@ -66,13 +67,14 @@ services:
        until ollama list >/dev/null 2>&1; do sleep 1; done
        ollama pull mistral
        ollama pull qwen3.5:9b
+       ollama pull hf.co/LiquidAI/LFM2.5-VL-3B-GGUF:Q4_0
        ollama run mistral "hi" </dev/null >/dev/null
        wait $$pid
    healthcheck:
-     test: ["CMD-SHELL", "ollama show mistral >/dev/null 2>&1 && ollama show qwen3.5:9b >/dev/null 2>&1 && ollama ps | grep -q mistral"]
+     test: ["CMD-SHELL", "ollama show mistral >/dev/null 2>&1 && ollama show qwen3.5:9b >/dev/null 2>&1 && ollama show hf.co/LiquidAI/LFM2.5-VL-3B-GGUF:Q4_0 >/dev/null 2>&1 && ollama ps | grep -q mistral"]
      interval: 10s
      timeout: 10s
-     retries: 120
+     retries: 150
      start_period: 30s
 
 # # LOCAL BUILD

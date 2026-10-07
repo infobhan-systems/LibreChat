@@ -1182,13 +1182,16 @@ endpoints:
 #         endpoint: "openAI"
 #         model: "gpt-4o-mini"
 
-# Ollama accepts only string text and image_url parts. A PDF sent as an OpenAI
-# file part is rejected with "invalid message format". Extract text instead.
+# Ollama accepts string text and image_url parts. A PDF sent as an OpenAI file
+# part is rejected with "invalid message format", so documents are extracted to
+# text. Images stay on the provider path so a vision model receives image_url.
 fileConfig:
   endpoints:
     ollama:
       defaultLLMDeliveryPath:
         fallback: text
+        overrides:
+          image/*: provider
 
 # Automatic conversation summarization (optional)
 # summarization:

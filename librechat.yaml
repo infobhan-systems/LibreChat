@@ -1057,7 +1057,8 @@ endpoints:
       baseURL: "http://ollama:11434/v1/"
       models:
         default: [
-          "mistral"
+          "mistral",
+          "qwen3.5:9b"
           ]
       # fetching list of models is supported but the `name` field must start
       # with `ollama` (case-insensitive), as it does in this example.

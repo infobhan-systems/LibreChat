@@ -39,8 +39,9 @@ services:
 
 
 # # ADD OLLAMA
-# Pulls mistral into ./ollama on first start, loads it onto the GPU, and keeps it
-# loaded. Later starts reuse the downloaded model. The API waits until it is resident.
+# Pulls mistral and qwen3.5:9b into ./ollama. Each ollama command takes one model.
+# Mistral is loaded for the default chat. Qwen is downloaded and loads when selected.
+# The 6 GB GPU cannot hold both at once.
  ollama:
    image: ollama/ollama:latest
    restart: always
@@ -64,13 +65,14 @@ services:
        pid=$$!
        until ollama list >/dev/null 2>&1; do sleep 1; done
        ollama pull mistral
+       ollama pull qwen3.5:9b
        ollama run mistral "hi" </dev/null >/dev/null
        wait $$pid
    healthcheck:
-     test: ["CMD-SHELL", "ollama ps | grep -q mistral"]
+     test: ["CMD-SHELL", "ollama show mistral >/dev/null 2>&1 && ollama show qwen3.5:9b >/dev/null 2>&1 && ollama ps | grep -q mistral"]
      interval: 10s
-     timeout: 5s
-     retries: 90
+     timeout: 10s
+     retries: 120
      start_period: 30s
 
 # # LOCAL BUILD

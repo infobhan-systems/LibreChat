@@ -536,6 +536,17 @@ if (cluster.isMaster) {
       }
     }
 
+    {
+      const shellTitle = process.env.APP_TITLE || 'Infobhan AI';
+      const shellDescription =
+        process.env.APP_DESCRIPTION || 'Infobhan AI — secure AI chat for your organization';
+      indexHTML = indexHTML.replace(/<title>[^<]*<\/title>/i, `<title>${shellTitle}</title>`);
+      indexHTML = indexHTML.replace(
+        /(<meta\s+name=["']description["']\s+content=["'])[^"']*(["'])/i,
+        `$1${shellDescription.replace(/"/g, '&quot;')}$2`,
+      );
+    }
+
     /* The composer lays out against whether a footer bar sits beneath it, and
        `/api/config` answers that only after it has painted. One shell serves
        every request, before there is a caller whose overrides could be resolved,

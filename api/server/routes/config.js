@@ -73,7 +73,7 @@ function buildPreLoginPayload() {
 
   /** @type {Partial<TStartupConfig>} */
   const payload = {
-    appTitle: process.env.APP_TITLE || 'LibreChat',
+    appTitle: process.env.APP_TITLE || 'Infobhan AI',
     discordLoginEnabled: !!process.env.DISCORD_CLIENT_ID && !!process.env.DISCORD_CLIENT_SECRET,
     facebookLoginEnabled: !!process.env.FACEBOOK_CLIENT_ID && !!process.env.FACEBOOK_CLIENT_SECRET,
     githubLoginEnabled: !!process.env.GITHUB_CLIENT_ID && !!process.env.GITHUB_CLIENT_SECRET,
@@ -215,6 +215,27 @@ router.get('/', async function (req, res) {
     const preLoginPayload = buildPreLoginPayload();
     const publicSharePayload = buildPublicSharePayload();
     const rum = getRumConfig();
+
+    // #region agent log
+    fetch('http://127.0.0.1:7415/ingest/2fe0b457-50fa-426a-b6b7-bf9ada7ea33a', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '2a1742' },
+      body: JSON.stringify({
+        sessionId: '2a1742',
+        runId: 'pre-fix',
+        hypothesisId: 'C',
+        location: 'api/server/routes/config.js:/api/config',
+        message: 'startup config appTitle',
+        data: {
+          appTitle: preLoginPayload.appTitle,
+          envAppTitleSet: typeof process.env.APP_TITLE === 'string' && process.env.APP_TITLE.length > 0,
+          envAppTitleLen: (process.env.APP_TITLE || '').length,
+          hasUser: !!req.user,
+        },
+        timestamp: Date.now(),
+      }),
+    }).catch(() => {});
+    // #endregion
 
     if (!req.user) {
       const tenantId = getTenantId();

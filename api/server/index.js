@@ -292,6 +292,19 @@ const startServer = async () => {
     }
   }
 
+  /* Align the SPA shell <title>/meta with APP_TITLE so the first paint and View Source
+     match the configured brand (not only the post-hydration document.title). */
+  {
+    const shellTitle = process.env.APP_TITLE || 'Infobhan AI';
+    const shellDescription =
+      process.env.APP_DESCRIPTION || 'Infobhan AI — secure AI chat for your organization';
+    indexHTML = indexHTML.replace(/<title>[^<]*<\/title>/i, `<title>${shellTitle}</title>`);
+    indexHTML = indexHTML.replace(
+      /(<meta\s+name=["']description["']\s+content=["'])[^"']*(["'])/i,
+      `$1${shellDescription.replace(/"/g, '&quot;')}$2`,
+    );
+  }
+
   /* The composer lays out against whether a footer bar sits beneath it, and
      `/api/config` answers that only after it has painted. One shell serves every
      request, before there is a caller whose overrides could be resolved, so the
@@ -301,6 +314,37 @@ const startServer = async () => {
     customFooter: process.env.CUSTOM_FOOTER,
     interfaceConfig: appConfig?.interfaceConfig,
   });
+
+  // #region agent log
+  {
+    const titleMatch = indexHTML.match(/<title>([^<]*)<\/title>/i);
+    const metaDescMatch = indexHTML.match(
+      /<meta\s+name=["']description["']\s+content=["']([^"']*)["']/i,
+    );
+    const faviconHrefs = [
+      ...indexHTML.matchAll(/rel=["'](?:icon|apple-touch-icon)["'][^>]*href=["']([^"']+)["']/gi),
+    ].map((m) => m[1]);
+    fetch('http://127.0.0.1:7415/ingest/2fe0b457-50fa-426a-b6b7-bf9ada7ea33a', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '2a1742' },
+      body: JSON.stringify({
+        sessionId: '2a1742',
+        runId: 'post-fix',
+        hypothesisId: 'A',
+        location: 'api/server/index.js:indexHTML',
+        message: 'served shell title/meta/favicon after brand inject',
+        data: {
+          indexPath,
+          title: titleMatch ? titleMatch[1] : null,
+          metaDescription: metaDescMatch ? metaDescMatch[1] : null,
+          faviconHrefs,
+          envAppTitle: process.env.APP_TITLE || null,
+        },
+        timestamp: Date.now(),
+      }),
+    }).catch(() => {});
+  }
+  // #endregion
 
   const cspPolicy = createCspPolicy();
   const shellCache = shellCacheHeaders(cspPolicy != null);

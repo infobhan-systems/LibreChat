@@ -32,10 +32,33 @@ services:
        condition: service_started
      ollama:
        condition: service_healthy
+   environment:
+     - APP_TITLE=${APP_TITLE:-Infobhan AI}
+     - CUSTOM_FOOTER=${CUSTOM_FOOTER:-Infobhan AI}
+     - INFOBHAN_ASSET_V=infobhan2
+     # Stock image: brand title/meta on read (dist often not writable under UID:GID).
+     - NODE_OPTIONS=--require /app/branding/fs-title-preload.js
+   # Optional on-disk patch when writable; preload is the reliable path.
+   command:
+     - /bin/sh
+     - -c
+     - node /app/branding/apply-shell-branding.js; exec npm run backend
    volumes:
    - type: bind
      source: ./librechat.yaml
      target: /app/librechat.yaml
+   - type: bind
+     source: ./branding/apply-shell-branding.js
+     target: /app/branding/apply-shell-branding.js
+     read_only: true
+   - type: bind
+     source: ./branding/fs-title-preload.js
+     target: /app/branding/fs-title-preload.js
+     read_only: true
+   # Runtime branding evidence (create empty file on host before up).
+   - type: bind
+     source: ./debug-2a1742.log
+     target: /app/debug-2a1742.log
    # Infobhan AI mark: AuthLayout loads /assets/logo.svg from the built client.
    - type: bind
      source: ./branding/logo.svg
@@ -43,6 +66,22 @@ services:
    - type: bind
      source: ./branding/logo.svg
      target: /app/client/public/assets/logo.svg
+   # Favicons / PWA icons (stock image still ships LibreChat feather icons).
+   - type: bind
+     source: ./branding/icons/favicon-16x16.png
+     target: /app/client/dist/assets/favicon-16x16.png
+   - type: bind
+     source: ./branding/icons/favicon-32x32.png
+     target: /app/client/dist/assets/favicon-32x32.png
+   - type: bind
+     source: ./branding/icons/apple-touch-icon-180x180.png
+     target: /app/client/dist/assets/apple-touch-icon-180x180.png
+   - type: bind
+     source: ./branding/icons/icon-192x192.png
+     target: /app/client/dist/assets/icon-192x192.png
+   - type: bind
+     source: ./branding/icons/maskable-icon.png
+     target: /app/client/dist/assets/maskable-icon.png
 
 
 # # ADD OLLAMA

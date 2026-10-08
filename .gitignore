@@ -69,7 +69,9 @@ api/tsconfig.json
 .cursor
 .aider*
 .bg-shell/
+ollama/
 
+*.log
 # Floobits
 .floo
 .floobit

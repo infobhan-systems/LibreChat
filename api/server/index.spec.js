@@ -260,7 +260,7 @@ describe('Server Configuration', () => {
   beforeAll(() => {
     fs.readFileSync = function (filepath, options) {
       if (filepath.includes('index.html')) {
-        return '<!DOCTYPE html><html><head><title>LibreChat</title></head><body><div id="root"></div></body></html>';
+        return '<!DOCTYPE html><html><head><title>Infobhan AI</title></head><body><div id="root"></div></body></html>';
       }
       return originalReadFileSync(filepath, options);
     };

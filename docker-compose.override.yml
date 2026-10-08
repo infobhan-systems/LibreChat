@@ -36,6 +36,13 @@ services:
    - type: bind
      source: ./librechat.yaml
      target: /app/librechat.yaml
+   # Infobhan AI mark: AuthLayout loads /assets/logo.svg from the built client.
+   - type: bind
+     source: ./branding/logo.svg
+     target: /app/client/dist/assets/logo.svg
+   - type: bind
+     source: ./branding/logo.svg
+     target: /app/client/public/assets/logo.svg
 
 
 # # ADD OLLAMA

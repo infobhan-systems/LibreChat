@@ -151,12 +151,12 @@ interface:
   fileSearch: true
   # Privacy policy settings
   privacyPolicy:
-    externalUrl: 'https://infobhan.com/privacy-policy'
+    externalUrl: 'https://infobhan.net/privacy-policy'
     openNewTab: true
 
   # Terms of service
   termsOfService:
-    externalUrl: 'https://infobhan.com/tos'
+    externalUrl: 'https://infobhan.net/tos'
     openNewTab: true
     modalAcceptance: true
     modalTitle: 'Terms of Service for Infobhan AI'
@@ -165,7 +165,7 @@ interface:
 
       *Effective Date: October 8, 2026*
 
-      Welcome to Infobhan AI. These Terms of Service ("Terms") govern your use of this application and the services we offer. By accessing or using Infobhan AI, you agree to be bound by these Terms and our Privacy Policy, accessible at https://infobhan.com/privacy-policy.
+      Welcome to Infobhan AI. These Terms of Service ("Terms") govern your use of this application and the services we offer. By accessing or using Infobhan AI, you agree to be bound by these Terms and our Privacy Policy, accessible at https://infobhan.net/privacy-policy.
 
       ## 1. Service
 
@@ -193,7 +193,7 @@ interface:
 
       ## 7. Contact Information
 
-      If you have questions about these Terms, contact Infobhan through https://infobhan.com.
+      If you have questions about these Terms, contact Infobhan through https://infobhan.net.
 
       By using Infobhan AI, you acknowledge that you have read these Terms of Service and agree to be bound by them.
 
@@ -1057,7 +1057,7 @@ endpoints:
       baseURL: "http://ollama:11434/v1/"
       models:
         default: [
-          "mistral",
+          "ministral-3b-2512",
           "qwen3.5:9b",
           "hf.co/LiquidAI/LFM2.5-VL-3B-GGUF:Q4_0"
           ]

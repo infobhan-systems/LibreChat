@@ -2,7 +2,7 @@ import { injectConfiguredFooterBootstrap } from './footer';
 import { applyCspNonce } from '~/security/csp';
 
 const SHELL =
-  '<!DOCTYPE html><html><head><title>LibreChat</title></head>' +
+  '<!DOCTYPE html><html><head><title>Infobhan AI</title></head>' +
   '<body><div id="root"></div><script type="module" src="/assets/index.js"></script></body></html>';
 
 const flagOf = (html: string): boolean | undefined => {

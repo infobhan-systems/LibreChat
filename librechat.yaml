@@ -1057,7 +1057,7 @@ endpoints:
       baseURL: "http://ollama:11434/v1/"
       models:
         default: [
-          "ministral-3b-2512",
+          "ministral-3:3b",
           "qwen3.5:9b",
           "hf.co/LiquidAI/LFM2.5-VL-3B-GGUF:Q4_0"
           ]
@@ -1065,9 +1065,9 @@ endpoints:
       # with `ollama` (case-insensitive), as it does in this example.
         fetch: false
       titleConvo: true
-      titleModel: "mistral"
+      titleModel: "ministral-3:3b"
       summarize: false
-      summaryModel: "mistral"
+      summaryModel: "ministral-3:3b"
       forcePrompt: false
       modelDisplayLabel: "Ollama"
 

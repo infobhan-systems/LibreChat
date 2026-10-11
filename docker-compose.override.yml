@@ -83,6 +83,21 @@ services:
      source: ./branding/icons/maskable-icon.png
      target: /app/client/dist/assets/maskable-icon.png
 
+# InfobhanAI Admin Panel chrome (title, sidebar logo, favicon) on the stock image.
+ admin-panel:
+   command:
+     - /bin/sh
+     - -c
+     - bun /branding/apply-admin-branding.js && exec bun server.ts
+   volumes:
+   - type: bind
+     source: ./branding/apply-admin-branding.js
+     target: /branding/apply-admin-branding.js
+     read_only: true
+   - type: bind
+     source: ./branding/admin-title-logo.png
+     target: /branding/admin-title-logo.png
+     read_only: true
 
 # # ADD OLLAMA
 # Pulls each model with its own ollama pull. Ministral 3B is loaded for default chat.

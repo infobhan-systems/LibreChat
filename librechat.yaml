@@ -917,7 +917,7 @@ endpoints:
       baseURL: 'https://api.x.ai/v1'
       models:
         default: ['grok-4.7']
-        fetch: true
+        fetch: false
       titleConvo: true
       titleModel: 'grok-4.7'
       modelDisplayLabel: 'xAI'
@@ -1003,7 +1003,7 @@ endpoints:
         # List of default models to use. At least one value is required.
         default: ['mistral-tiny', 'mistral-small', 'mistral-medium']
         # Fetch option: Set to true to fetch models from API.
-        fetch: true # Defaults to false.
+        fetch: false # Defaults to false.
 
       # Optional configurations
 
@@ -1043,7 +1043,7 @@ endpoints:
         x-librechat-body-parentmessageid: '{{LIBRECHAT_BODY_PARENTMESSAGEID}}'
       models:
         default: ['meta-llama/llama-3-70b-instruct']
-        fetch: true
+        fetch: false
       titleConvo: true
       titleModel: 'meta-llama/llama-3-70b-instruct'
       # Recommended: Drop the stop parameter from the request as Openrouter models use a variety of stop tokens.

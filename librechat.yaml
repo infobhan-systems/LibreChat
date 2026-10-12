@@ -923,52 +923,52 @@ endpoints:
     #   modelDisplayLabel: 'xAI'
 
     # Shared OpenAI chat endpoint (admin-held key). Name cannot be the reserved id `openAI`.
-    - name: 'OpenAI'
-      apiKey: '${OPENAI_API_KEY}'
-      baseURL: 'https://api.openai.com/v1'
-      models:
-        default: ['gpt-4o', 'gpt-4o-mini']
-        fetch: false
-      titleConvo: true
-      titleModel: 'gpt-4o-mini'
-      modelDisplayLabel: 'OpenAI'
+    # - name: 'OpenAI'
+    #   apiKey: '${OPENAI_API_KEY}'
+    #   baseURL: 'https://api.openai.com/v1'
+    #   models:
+    #     default: ['gpt-4o', 'gpt-4o-mini']
+    #     fetch: false
+    #   titleConvo: true
+    #   titleModel: 'gpt-4o-mini'
+    #   modelDisplayLabel: 'OpenAI'
 
-    # Shared Google / Gemini chat via the OpenAI-compatible API (admin-held key).
-    # Name cannot be the reserved id `google`.
-    - name: 'Google'
-      apiKey: '${GOOGLE_KEY}'
-      baseURL: 'https://generativelanguage.googleapis.com/v1beta/openai/'
-      models:
-        default: ['gemini-2.5-flash']
-        fetch: true
-      titleConvo: true
-      titleModel: 'gemini-2.5-flash'
-      modelDisplayLabel: 'Google'
+    # # Shared Google / Gemini chat via the OpenAI-compatible API (admin-held key).
+    # # Name cannot be the reserved id `google`.
+    # - name: 'Google'
+    #   apiKey: '${GOOGLE_KEY}'
+    #   baseURL: 'https://generativelanguage.googleapis.com/v1beta/openai/'
+    #   models:
+    #     default: ['gemini-2.5-flash']
+    #     fetch: true
+    #   titleConvo: true
+    #   titleModel: 'gemini-2.5-flash'
+    #   modelDisplayLabel: 'Google'
 
     # Single Claude endpoint (Anthropic native `/v1/messages` API). This is the only
     # Anthropic setting for admins and users — do not also enable the built-in `anthropic`
     # endpoint. The `baseURL` must be the API root; the Anthropic SDK appends `/v1/messages`.
     # List models explicitly: model auto-fetch uses the OpenAI `/models` convention and is
     # not used for this provider.
-    - name: 'Claude'
-      provider: 'anthropic'
-      apiKey: '${ANTHROPIC_API_KEY}'
-      baseURL: 'https://api.anthropic.com'
-      # (optional) headers forwarded on every request (e.g. for a reverse proxy);
-      # values support the same placeholders as built-in endpoints.
-      headers:
-        anthropic-version: '2023-06-01'
-      models:
-        default:
-          - 'claude-sonnet-4-5'
-          - 'claude-opus-4-5'
-        fetch: false
-      titleConvo: true
-      titleModel: 'claude-sonnet-4-5'
-      # Agent activity groups: collapse each block of reasoning + tool calls
-      # under a generated one-line header. Same shape as the title options.
-      activityLabel: true
-      activityModel: 'claude-3-5-haiku'
+    # - name: 'Claude'
+    #   provider: 'anthropic'
+    #   apiKey: '${ANTHROPIC_API_KEY}'
+    #   baseURL: 'https://api.anthropic.com'
+    #   # (optional) headers forwarded on every request (e.g. for a reverse proxy);
+    #   # values support the same placeholders as built-in endpoints.
+    #   headers:
+    #     anthropic-version: '2023-06-01'
+    #   models:
+    #     default:
+    #       - 'claude-sonnet-4-5'
+    #       - 'claude-opus-4-5'
+    #     fetch: false
+    #   titleConvo: true
+    #   titleModel: 'claude-sonnet-4-5'
+    #   # Agent activity groups: collapse each block of reasoning + tool calls
+    #   # under a generated one-line header. Same shape as the title options.
+    #   activityLabel: true
+    #   activityModel: 'claude-3-5-haiku'
       # activityEndpoint: 'Claude'   # run labels on another endpoint's credentials
       # activityPrompt: 'Write a 5-9 word past-tense label...'
       # activityMaxPerRun: 20           # cost cap per response
@@ -995,7 +995,7 @@ endpoints:
       # reasoningLabelUpdateIntervalMs: 3000
       # A final rewrite may run immediately after a meaningful 120-character tail.
       # reasoningLabelMaxPerRun: 8
-      modelDisplayLabel: 'Claude'
+      # modelDisplayLabel: 'Claude'
 
     # Groq Example
     # - name: 'groq'

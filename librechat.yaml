@@ -249,14 +249,18 @@ interface:
   fileCitations: true
   # Show the thumbs up/thumbs down feedback buttons on responses (default: true)
   feedback: true
+  # Composer context gauge (tokens used vs model context window)
+  contextUsage: true
+  # Dollar cost on the same gauge and on persisted metadata.usage.cost
+  contextCost: true
   # Conversation trace viewer: a waterfall of the model calls and tool spans behind
   # each response, read from the deployment's Langfuse project. The control only
   # appears on the requesting user's own conversations with a sampled trace, and
   # needs a Langfuse release that serves the v2 Observations API.
-  # traceViewer:
-  #   enabled: false
-  #   # Traces are matched to users by the internal user id, so no trace is shown while
-  #   # langfuse.trace.userIdField exports another user field.
+  # Traces are matched to users by the internal user id, so no trace is shown while
+  # langfuse.trace.userIdField exports another user field.
+  traceViewer:
+    enabled: true
   #   # Return observation input, output and metadata in the record inspector. Input
   #   # carries system prompts, agent instructions and tool definitions, which a
   #   # user chatting with a shared agent cannot otherwise see.
@@ -359,23 +363,20 @@ registration:
   #   startupAttempts: 1   # attempts before startup continues; 0 = background retries only
   #   retryDelayMs: 5000   # delay between startup and background attempts
 
-# Example Balance settings
-# balance:
-#   enabled: false
-#   startBalance: 20000
-#   autoRefillEnabled: false
-#   refillIntervalValue: 30
-#   refillIntervalUnit: 'days'
-#   refillAmount: 10000
-#   reservationTtlMs: 1800000  # How long an in-flight request's reserved credits count if never released
+# Balance: $2 per user (2,000,000 credits). Shared across all paid models.
+# Local Ollama models stay free via tokenConfig rates of 0 on Infobhan (Local).
+balance:
+  enabled: true
+  startBalance: 2000000
+  autoRefillEnabled: false
+  refillIntervalValue: 30
+  refillIntervalUnit: 'days'
+  refillAmount: 10000
+  reservationTtlMs: 1800000  # How long an in-flight request's reserved credits count if never released
 
-# Example Transactions settings
-# Controls whether to save transaction records to the database
-# Default is true (enabled)
-#transactions:
-#  enabled: false
-# Note: If balance.enabled is true, transactions will always be enabled
-# regardless of this setting to ensure balance tracking works correctly
+# Transactions: save spend rows to Mongo. Forced on when balance.enabled is true.
+transactions:
+  enabled: true
 
 # Speech (STT/TTS) outbound requests to operator-provided target URLs are SSRF-guarded
 # at connect time: private, loopback, link-local, and cloud-metadata targets are blocked
@@ -1092,6 +1093,21 @@ endpoints:
       summaryModel: "ministral-3:3b"
       forcePrompt: false
       modelDisplayLabel: "Ollama"
+      # Zero rates keep on-prem models free and usable after the $2 paid balance is spent.
+      # prompt/completion are dollars per million tokens; context is the gauge window only.
+      tokenConfig:
+        "ministral-3:3b":
+          prompt: 0
+          completion: 0
+          context: 131072
+        "qwen3.5:9b":
+          prompt: 0
+          completion: 0
+          context: 131072
+        "hf.co/LiquidAI/LFM2.5-VL-3B-GGUF:Q4_0":
+          prompt: 0
+          completion: 0
+          context: 131072
 
   # AWS Bedrock Example
   # Note: Bedrock endpoint is configured via environment variables

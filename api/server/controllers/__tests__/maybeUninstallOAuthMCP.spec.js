@@ -31,6 +31,11 @@ jest.mock('@librechat/data-schemas', () => ({
 jest.mock('@librechat/api', () => {
   return {
     ...jest.requireActual('@librechat/api'),
+    createEmailChangeService: jest.fn(() => ({
+      requestEmailChange: jest.fn(),
+      confirmEmailChange: jest.fn(),
+    })),
+    createEmailChangeDeps: jest.fn(() => ({})),
     MCPOAuthHandler: {
       revokeOAuthToken: (...args) => mockRevokeOAuthToken(...args),
       deleteFlowAndStateMapping: (...args) => mockDeleteFlowAndStateMapping(...args),
@@ -152,6 +157,8 @@ jest.mock('~/models', () => ({
   removeUserFromAllGroups: jest.fn(),
   deleteAclEntries: jest.fn(),
   getSoleOwnedResourceIds: jest.fn().mockResolvedValue([]),
+  findUserErasableMCPServers: jest.fn().mockResolvedValue([]),
+  deleteMCPServersWithAcl: jest.fn(),
 }));
 
 const { maybeUninstallOAuthMCP } = require('~/server/controllers/UserController');
@@ -246,6 +253,18 @@ describe('maybeUninstallOAuthMCP', () => {
     expect(mockDeleteUserTokens.mock.calls[0][0]).toMatchObject({ userId, serverName });
     expect(mockDeleteFlow).toHaveBeenCalledTimes(1);
     expect(mockDeleteFlowAndStateMapping).toHaveBeenCalledTimes(1);
+  });
+
+  test('resolves the server past a profile hide, so revocation still reaches it', async () => {
+    setupOAuthServerFound();
+    mockGetClientInfoAndMetadata.mockResolvedValue(null);
+
+    await maybeUninstallOAuthMCP(userId, pluginKey, appConfig);
+
+    expect(mockGetServerConfig).toHaveBeenCalledWith(serverName, userId, undefined, undefined, {
+      includeHidden: true,
+    });
+    expect(mockGetOAuthServers).toHaveBeenCalledWith(userId, { includeHidden: true });
   });
 
   test('scopes metadata-missing cleanup to token records snapshotted before flow cancellation', async () => {

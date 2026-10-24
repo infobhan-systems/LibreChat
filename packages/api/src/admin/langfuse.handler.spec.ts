@@ -1,12 +1,17 @@
 process.env.CREDS_KEY =
   process.env.CREDS_KEY ?? '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef';
 
+import type {
+  TLangfuseUnavailableReason,
+  TLangfuseUnavailableResponse,
+} from 'librechat-data-provider';
 import type { Response } from 'express';
 import type { ServerRequest } from '~/types/http';
 
 // Loaded via dynamic import in beforeAll so the crypto module initializes
 // after CREDS_KEY is set above (encryptV3 reads the key at module load).
 let encryptV3: typeof import('@librechat/data-schemas').encryptV3;
+let ConfigRevisionConflictError: typeof import('@librechat/data-schemas').ConfigRevisionConflictError;
 let createAdminLangfuseHandlers: typeof import('./langfuse').createAdminLangfuseHandlers;
 let getLangfuseDestinationId: typeof import('../langfuse/destinations').getLangfuseDestinationId;
 const realFetch = global.fetch;
@@ -20,7 +25,7 @@ function projectResponse(projectId = 'project-1') {
 }
 
 beforeAll(async () => {
-  ({ encryptV3 } = await import('@librechat/data-schemas'));
+  ({ encryptV3, ConfigRevisionConflictError } = await import('@librechat/data-schemas'));
   ({ createAdminLangfuseHandlers } = await import('./langfuse'));
   ({ getLangfuseDestinationId } = await import('../langfuse/destinations'));
 });
@@ -122,6 +127,15 @@ function rehydrate(fields: Record<string, unknown>): Record<string, unknown> {
   return langfuse;
 }
 
+/** The 404 a deployment without Langfuse connection settings answers, naming why. */
+function unavailable(reason: TLangfuseUnavailableReason): TLangfuseUnavailableResponse {
+  return {
+    error: 'Langfuse connection settings are not available',
+    code: 'LANGFUSE_UNAVAILABLE',
+    reason,
+  };
+}
+
 describe('createAdminLangfuseHandlers', () => {
   describe('connection availability gate', () => {
     it('rejects connection reads when deployment fanout is disabled', async () => {
@@ -132,7 +146,7 @@ describe('createAdminLangfuseHandlers', () => {
       await handlers.getConnection(mockReq(), res);
 
       expect(res.statusCode).toBe(404);
-      expect(res.body).toEqual({ error: 'Langfuse connection settings are not available' });
+      expect(res.body).toEqual(unavailable('fanout_disabled'));
       expect(deps.findConfigByPrincipal).not.toHaveBeenCalled();
     });
 
@@ -147,7 +161,7 @@ describe('createAdminLangfuseHandlers', () => {
       );
 
       expect(res.statusCode).toBe(404);
-      expect(res.body).toEqual({ error: 'Langfuse connection settings are not available' });
+      expect(res.body).toEqual(unavailable('fanout_disabled'));
       expect(deps.patchConfigFields).not.toHaveBeenCalled();
     });
 
@@ -159,7 +173,7 @@ describe('createAdminLangfuseHandlers', () => {
       await handlers.getConnection(mockReq(), res);
 
       expect(res.statusCode).toBe(404);
-      expect(res.body).toEqual({ error: 'Langfuse connection settings are not available' });
+      expect(res.body).toEqual(unavailable('fanout_disabled'));
       expect(deps.findConfigByPrincipal).not.toHaveBeenCalled();
     });
 
@@ -175,7 +189,7 @@ describe('createAdminLangfuseHandlers', () => {
       );
 
       expect(res.statusCode).toBe(404);
-      expect(res.body).toEqual({ error: 'Langfuse connection settings are not available' });
+      expect(res.body).toEqual(unavailable('fanout_disabled'));
       expect(deps.findConfigByPrincipal).not.toHaveBeenCalled();
       expect(global.fetch).not.toHaveBeenCalled();
     });
@@ -188,7 +202,7 @@ describe('createAdminLangfuseHandlers', () => {
       await handlers.getConnection(mockReq(), res);
 
       expect(res.statusCode).toBe(404);
-      expect(res.body).toEqual({ error: 'Langfuse connection settings are not available' });
+      expect(res.body).toEqual(unavailable('tenant_export_disabled'));
       expect(deps.findConfigByPrincipal).not.toHaveBeenCalled();
     });
 
@@ -216,17 +230,22 @@ describe('createAdminLangfuseHandlers', () => {
       await handlers.getConnection(mockReq(), res);
 
       expect(res.statusCode).toBe(404);
+      expect(res.body).toEqual(unavailable('env_credentials'));
       expect(deps.findConfigByPrincipal).not.toHaveBeenCalled();
     });
 
-    it('rejects settings when tracing is disabled', async () => {
-      process.env.LANGFUSE_TRACING_ENABLED = 'false';
+    it.each([
+      ['LANGFUSE_TRACING_ENABLED', 'false'],
+      ['LANGFUSE_SAMPLE_RATE', '0'],
+    ])('rejects settings when tracing is off (%s=%s)', async (key, value) => {
+      process.env[key] = value;
       const { handlers, deps } = createHandlers();
       const res = mockRes();
 
       await handlers.getConnection(mockReq(), res);
 
       expect(res.statusCode).toBe(404);
+      expect(res.body).toEqual(unavailable('tracing_disabled'));
       expect(deps.findConfigByPrincipal).not.toHaveBeenCalled();
     });
   });
@@ -526,7 +545,7 @@ describe('createAdminLangfuseHandlers', () => {
       const fields = deps.patchConfigFields.mock.calls[0][3];
       expect(fields['langfuse.secretKey']).toMatch(/^v3:/);
       expect(fields['langfuse.secretKey']).not.toContain('sk-lf-secret');
-      expect(fields['langfuse.secretKeyPreview']).toBe('sk-lf-...cret');
+      expect(fields['langfuse.secretKeyPreview']).toBe('************');
       expect(fields['langfuse.enabled']).toBe(true);
       expect(fields['langfuse.destination']).toBe('eu');
       expect(fields['langfuse.publicKey']).toBe('pk-lf-1');
@@ -545,6 +564,69 @@ describe('createAdminLangfuseHandlers', () => {
       });
       expect(JSON.stringify(deps.recordConnectionUpdate.mock.calls)).not.toContain('sk-lf-secret');
       expect(JSON.stringify(deps.recordConnectionUpdate.mock.calls)).not.toContain('pk-lf-1');
+    });
+
+    it('records langfuse.updated with the changes and never the keys', async () => {
+      const recordAuditEntry = jest.fn().mockResolvedValue(undefined);
+      const { handlers } = createHandlers({ recordAuditEntry });
+      const res = mockRes();
+
+      await handlers.updateConnection(
+        mockReq({
+          body: {
+            enabled: true,
+            destination: 'eu',
+            publicKey: 'pk-lf-1',
+            secretKey: 'sk-lf-secret',
+          },
+        }),
+        res,
+      );
+
+      expect(res.statusCode).toBe(200);
+      expect(recordAuditEntry).toHaveBeenCalledTimes(1);
+      const input = recordAuditEntry.mock.calls[0][0];
+      expect(input).toEqual(
+        expect.objectContaining({
+          action: 'langfuse.updated',
+          target: { type: 'langfuse', id: 'connection' },
+          metadata: { changes: 'created', enabled: true, destination: 'eu' },
+        }),
+      );
+      expect(JSON.stringify(input)).not.toContain('sk-lf-secret');
+      expect(JSON.stringify(input)).not.toContain('pk-lf-1');
+    });
+
+    it('starts cache invalidation before waiting on the audit write', async () => {
+      const order: string[] = [];
+      const recordAuditEntry = jest.fn().mockImplementation(async () => {
+        order.push('audit');
+      });
+      const invalidateConfigCaches = jest.fn().mockImplementation(async () => {
+        order.push('invalidate');
+      });
+      const { handlers } = createHandlers({ recordAuditEntry, invalidateConfigCaches });
+
+      await handlers.updateConnection(
+        mockReq({
+          body: { enabled: true, destination: 'eu', publicKey: 'pk-lf-1', secretKey: 'sk-lf-2' },
+        }),
+        mockRes(),
+      );
+
+      expect(order[0]).toBe('invalidate');
+      expect(order).toContain('audit');
+    });
+
+    it('records nothing when the update is rejected', async () => {
+      const recordAuditEntry = jest.fn().mockResolvedValue(undefined);
+      const { handlers } = createHandlers({ recordAuditEntry });
+      const res = mockRes();
+
+      await handlers.updateConnection(mockReq({ body: { enabled: true } }), res);
+
+      expect(res.statusCode).toBe(400);
+      expect(recordAuditEntry).not.toHaveBeenCalled();
     });
 
     it('requires a new secret when connection fields change', async () => {
@@ -765,9 +847,128 @@ describe('createAdminLangfuseHandlers', () => {
       expect(deps.findConfigByPrincipal).toHaveBeenCalledWith('role', '__base__', {
         includeInactive: true,
       });
-      expect(deps.patchConfigFields.mock.calls[0][4]).toBe(42);
+      /** No priority is sent, so the store keeps the stored 42. */
+      expect(deps.patchConfigFields.mock.calls[0][4]).toBeUndefined();
       expect(deps.toggleConfigActive).toHaveBeenCalledWith('role', '__base__', true);
       expect(res.body).toMatchObject({ configured: true, enabled: true });
+    });
+  });
+
+  describe('updateConnection write conflict', () => {
+    it('answers 409 when the base config keeps changing under the write', async () => {
+      const recordAuditEntry = jest.fn().mockResolvedValue(undefined);
+      const { handlers, deps } = createHandlers({
+        patchConfigFields: jest.fn().mockRejectedValue(new ConfigRevisionConflictError('cfg1:4')),
+        recordAuditEntry,
+      });
+      const res = mockRes();
+
+      await handlers.updateConnection(
+        mockReq({
+          body: {
+            enabled: true,
+            destination: 'eu',
+            publicKey: 'pk-lf-1',
+            secretKey: 'sk-lf-secret',
+          },
+        }),
+        res,
+      );
+
+      expect(res.statusCode).toBe(409);
+      expect(res.body).toEqual({
+        error: 'Config was modified by another request',
+        code: 'CONFIG_VERSION_CONFLICT',
+      });
+      expect(deps.toggleConfigActive).not.toHaveBeenCalled();
+      expect(deps.recordConnectionUpdate).not.toHaveBeenCalled();
+      expect(recordAuditEntry).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('updateConnection activation failure', () => {
+    it('still audits and invalidates caches when activation fails after the patch committed', async () => {
+      const inactive = {
+        ...baseConfigDoc({
+          enabled: true,
+          destination: 'eu',
+          publicKey: 'pk-lf-1',
+          secretKey: encryptV3('sk-lf-secret'),
+        }),
+        isActive: false,
+      };
+      const recordAuditEntry = jest.fn().mockResolvedValue(undefined);
+      const invalidateConfigCaches = jest.fn().mockResolvedValue(undefined);
+      const { handlers } = createHandlers({
+        findConfigByPrincipal: jest.fn().mockResolvedValue(inactive),
+        patchConfigFields: jest.fn().mockResolvedValue(inactive),
+        toggleConfigActive: jest.fn().mockRejectedValue(new Error('toggle failed')),
+        recordAuditEntry,
+        invalidateConfigCaches,
+      });
+      const res = mockRes();
+
+      await handlers.updateConnection(
+        mockReq({
+          body: {
+            enabled: true,
+            destination: 'eu',
+            publicKey: 'pk-lf-1',
+            secretKey: 'sk-lf-secret',
+          },
+        }),
+        res,
+      );
+
+      expect(res.statusCode).toBe(500);
+      expect(invalidateConfigCaches).toHaveBeenCalled();
+      expect(recordAuditEntry).toHaveBeenCalledWith(
+        expect.objectContaining({
+          action: 'langfuse.updated',
+          metadata: expect.objectContaining({ enabled: false, activation: 'failed' }),
+        }),
+      );
+    });
+  });
+
+  describe('updateConnection activation returning null', () => {
+    it('treats a vanished config as a failed activation', async () => {
+      const inactive = {
+        ...baseConfigDoc({
+          enabled: true,
+          destination: 'eu',
+          publicKey: 'pk-lf-1',
+          secretKey: encryptV3('sk-lf-secret'),
+        }),
+        isActive: false,
+      };
+      const recordAuditEntry = jest.fn().mockResolvedValue(undefined);
+      const { handlers } = createHandlers({
+        findConfigByPrincipal: jest.fn().mockResolvedValue(inactive),
+        patchConfigFields: jest.fn().mockResolvedValue(inactive),
+        toggleConfigActive: jest.fn().mockResolvedValue(null),
+        recordAuditEntry,
+      });
+      const res = mockRes();
+
+      await handlers.updateConnection(
+        mockReq({
+          body: {
+            enabled: true,
+            destination: 'eu',
+            publicKey: 'pk-lf-1',
+            secretKey: 'sk-lf-secret',
+          },
+        }),
+        res,
+      );
+
+      expect(res.statusCode).toBe(500);
+      expect(recordAuditEntry).toHaveBeenCalledWith(
+        expect.objectContaining({
+          metadata: expect.objectContaining({ enabled: false, activation: 'failed' }),
+        }),
+      );
     });
   });
 

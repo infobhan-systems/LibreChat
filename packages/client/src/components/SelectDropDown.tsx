@@ -1,4 +1,4 @@
-import React, { useRef } from 'react';
+import React from 'react';
 import { JSX } from 'react/jsx-runtime';
 import {
   Label,
@@ -9,9 +9,9 @@ import {
   ListboxOptions,
 } from '@headlessui/react';
 import type { Option, OptionWithIcon, DropdownValueSetter } from '~/common';
+import { cn, disabledFillClasses } from '~/utils';
 import { useMultiSearch } from './MultiSearch';
 import { CheckMark } from '~/svgs';
-import { cn } from '~/utils';
 
 type SelectDropDownProps = {
   id?: string;
@@ -24,8 +24,8 @@ type SelectDropDownProps = {
   emptyTitle?: boolean;
   showAbove?: boolean;
   showLabel?: boolean;
-  iconSide?: 'left' | 'right';
-  optionIconSide?: 'left' | 'right';
+  iconSide?: IconSide;
+  optionIconSide?: IconSide;
   renderOption?: () => React.ReactNode;
   containerClassName?: string;
   currentValueClass?: string;
@@ -37,6 +37,27 @@ type SelectDropDownProps = {
   searchClassName?: string;
   searchPlaceholder?: string;
   showOptionIcon?: boolean;
+};
+
+/** `left` and `right` are physical edges in every direction; `start` and `end` follow the
+ *  reading direction, so they mirror in RTL. */
+type IconSide = 'left' | 'right' | 'start' | 'end';
+
+const checkMarkSide: Record<IconSide, string> = {
+  left: 'left-0 pl-2',
+  right: 'right-0 pr-3',
+  start: 'inset-s-0 ps-2',
+  end: 'inset-e-0 pe-3',
+};
+
+/** Room for a check mark that sits before the label. */
+const labelCheckGap: Record<IconSide, string> = { left: 'ml-4', right: '', start: 'ms-4', end: '' };
+
+const trailingOptionIcon: Record<IconSide, string> = {
+  left: '',
+  right: 'absolute right-0 pr-2',
+  start: '',
+  end: 'absolute inset-e-0 pe-2',
 };
 
 function getOptionText(option: string | Option | OptionWithIcon): string {
@@ -61,8 +82,8 @@ function SelectDropDown({
   showAbove = false,
   showLabel = true,
   emptyTitle = false,
-  iconSide = 'right',
-  optionIconSide = 'left',
+  iconSide = 'end',
+  optionIconSide = 'start',
   placeholder,
   containerClassName,
   optionsListClass,
@@ -98,8 +119,8 @@ function SelectDropDown({
   const hasSearchRender = searchRender != null;
   const options = hasSearchRender ? filteredValues : values;
   const renderIcon = showOptionIcon && value != null && (value as OptionWithIcon).icon != null;
-
-  const buttonRef = useRef<HTMLButtonElement>(null);
+  /** The wide padding keeps the label clear of a trailing check mark, on the same axis as it. */
+  const optionPadding = iconSide === 'left' || iconSide === 'right' ? 'pr-9 pl-3' : 'ps-3 pe-9';
 
   return (
     <div className={cn('flex items-center justify-center gap-2', containerClassName ?? '')}>
@@ -108,24 +129,27 @@ function SelectDropDown({
           {({ open }) => (
             <>
               <ListboxButton
-                ref={buttonRef}
                 data-testid="select-dropdown-button"
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') {
-                    e.preventDefault();
-                    if (!open && buttonRef.current) {
-                      buttonRef.current.click();
-                    }
+                onKeyDown={(event) => {
+                  if (event.key !== 'Enter') {
+                    return;
+                  }
+                  event.preventDefault();
+                  if (!open) {
+                    event.currentTarget.dispatchEvent(
+                      new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true }),
+                    );
                   }
                 }}
                 className={cn(
-                  'relative flex w-full cursor-default flex-col rounded-md border border-border-light bg-surface-secondary py-2 pl-3 pr-10 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-text-primary focus-visible:ring-offset-2 disabled:bg-surface-secondary sm:text-sm',
+                  'border-border-control bg-surface-secondary focus-visible:ring-focus-control disabled:bg-surface-secondary relative flex w-full cursor-default flex-col rounded-md border py-2 ps-3 pe-10 text-start focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:outline-hidden sm:text-sm',
+                  disabledFillClasses,
                   className ?? '',
                 )}
               >
                 {showLabel && (
                   <Label
-                    className="block text-xs text-text-secondary"
+                    className="text-text-secondary block text-xs"
                     id="headlessui-listbox-label-:r1:"
                     data-headlessui-state=""
                   >
@@ -135,21 +159,21 @@ function SelectDropDown({
                 <span className="inline-flex w-full truncate">
                   <span
                     className={cn(
-                      'flex h-6 items-center gap-1 truncate text-sm text-text-primary',
+                      'text-text-primary flex h-6 items-center gap-1 truncate text-sm',
                       !showLabel ? 'text-xs' : '',
                       currentValueClass ?? '',
                     )}
                   >
                     {!showLabel && !emptyTitle && (
-                      <span className="text-xs text-text-secondary">{title}:</span>
+                      <span className="text-text-secondary text-xs">{title}:</span>
                     )}
-                    {renderIcon && optionIconSide !== 'right' && (
+                    {renderIcon && trailingOptionIcon[optionIconSide] === '' && (
                       <span className="icon-md flex items-center">
                         {(value as OptionWithIcon).icon}
                       </span>
                     )}
                     {renderIcon && (
-                      <span className="icon-md absolute right-0 mr-8 flex items-center">
+                      <span className="icon-md absolute inset-e-0 me-8 flex items-center">
                         {(value as OptionWithIcon).icon}
                       </span>
                     )}
@@ -164,7 +188,7 @@ function SelectDropDown({
                     })()}
                   </span>
                 </span>
-                <span className="pointer-events-none absolute inset-y-0 right-0 flex items-center pr-2">
+                <span className="pointer-events-none absolute inset-y-0 inset-e-0 flex items-center pe-2">
                   <svg
                     stroke="currentColor"
                     fill="none"
@@ -172,7 +196,7 @@ function SelectDropDown({
                     viewBox="0 0 24 24"
                     strokeLinecap="round"
                     strokeLinejoin="round"
-                    className="h-4 w-4 text-text-tertiary"
+                    className="text-text-tertiary h-4 w-4"
                     height="1em"
                     width="1em"
                     xmlns="http://www.w3.org/2000/svg"
@@ -192,7 +216,7 @@ function SelectDropDown({
               >
                 <ListboxOptions
                   className={cn(
-                    'absolute z-10 mt-2 max-h-60 w-full overflow-auto rounded border border-border-light bg-surface-secondary text-xs md:w-[100%]',
+                    'border-border-light bg-surface-secondary absolute z-10 mt-2 max-h-60 w-full overflow-auto rounded-sm border text-xs md:w-[100%]',
                     optionsListClass ?? '',
                   )}
                 >
@@ -201,7 +225,8 @@ function SelectDropDown({
                       key={'listbox-render-option'}
                       value={null}
                       className={cn(
-                        'group relative flex h-[42px] cursor-pointer select-none items-center overflow-hidden pl-3 pr-9 text-text-primary hover:bg-surface-hover',
+                        'group text-text-primary hover:bg-surface-hover relative flex h-[2.625rem] cursor-pointer items-center overflow-hidden select-none',
+                        optionPadding,
                         optionsClass ?? '',
                       )}
                     >
@@ -230,7 +255,8 @@ function SelectDropDown({
                         value={option}
                         className={({ active }) =>
                           cn(
-                            'group relative flex h-[42px] cursor-pointer select-none items-center overflow-hidden pl-3 pr-9 text-text-primary hover:bg-surface-hover',
+                            'group text-text-primary hover:bg-surface-hover relative flex h-[2.625rem] cursor-pointer items-center overflow-hidden select-none',
+                            optionPadding,
                             active ? 'bg-surface-active text-text-primary' : '',
                             optionsClass ?? '',
                           )
@@ -239,28 +265,23 @@ function SelectDropDown({
                         <span className="flex items-center gap-1.5 truncate">
                           <span
                             className={cn(
-                              'flex h-6 items-center gap-1 text-text-primary',
+                              'text-text-primary flex h-6 items-center gap-1',
                               option === value ? 'font-semibold' : '',
-                              iconSide === 'left' ? 'ml-4' : '',
+                              labelCheckGap[iconSide],
                             )}
                           >
                             {currentIcon != null && (
-                              <span
-                                className={cn(
-                                  'mr-1',
-                                  optionIconSide === 'right' ? 'absolute right-0 pr-2' : '',
-                                )}
-                              >
+                              <span className={cn('me-1', trailingOptionIcon[optionIconSide])}>
                                 {currentIcon}
                               </span>
                             )}
                             {currentLabel}
                           </span>
-                          {currentValue === activeValue && (
+                          {value != null && currentValue === activeValue && (
                             <span
                               className={cn(
-                                'absolute inset-y-0 flex items-center text-text-primary',
-                                iconSide === 'left' ? 'left-0 pl-2' : 'right-0 pr-3',
+                                'text-text-primary absolute inset-y-0 flex items-center',
+                                checkMarkSide[iconSide],
                               )}
                             >
                               <CheckMark />

@@ -1094,20 +1094,21 @@ endpoints:
       forcePrompt: false
       modelDisplayLabel: "Ollama"
       # Zero rates keep on-prem models free and usable after the $2 paid balance is spent.
-      # prompt/completion are dollars per million tokens; context is the gauge window only.
+      # prompt/completion are dollars per million tokens. context must match
+      # OLLAMA_CONTEXT_LENGTH in docker-compose.override.yml (32768).
       tokenConfig:
         "ministral-3:3b":
           prompt: 0
           completion: 0
-          context: 131072
+          context: 32768
         "qwen3.5:9b":
           prompt: 0
           completion: 0
-          context: 131072
+          context: 32768
         "hf.co/LiquidAI/LFM2.5-VL-3B-GGUF:Q4_0":
           prompt: 0
           completion: 0
-          context: 131072
+          context: 32768
 
   # AWS Bedrock Example
   # Note: Bedrock endpoint is configured via environment variables

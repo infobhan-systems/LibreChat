@@ -132,6 +132,7 @@ services:
        pid=$$!
        until ollama list >/dev/null 2>&1; do sleep 1; done
        ollama pull ministral-3:3b
+       ollama pull mistral-small:24b
        ollama pull qwen3.5:9b
        ollama pull hf.co/LiquidAI/LFM2.5-VL-3B-GGUF:Q4_0
        ollama run ministral-3:3b "hi" </dev/null >/dev/null

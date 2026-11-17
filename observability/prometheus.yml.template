@@ -1,0 +1,36 @@
+# Rendered at container start. Placeholders are replaced from .env.observability.
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+scrape_configs:
+  - job_name: librechat-api
+    metrics_path: /metrics
+    scheme: http
+    authorization:
+      type: Bearer
+      credentials: __METRICS_SECRET__
+    static_configs:
+      - targets:
+          - __METRICS_SCRAPE_TARGET__
+
+  - job_name: nvidia-gpu
+    metrics_path: /metrics
+    scheme: http
+    static_configs:
+      - targets:
+          - __NVIDIA_GPU_SCRAPE_TARGET__
+
+  - job_name: ollama-exporter
+    metrics_path: /metrics
+    scheme: http
+    static_configs:
+      - targets:
+          - __OLLAMA_EXPORTER_SCRAPE_TARGET__
+
+  - job_name: node
+    metrics_path: /metrics
+    scheme: http
+    static_configs:
+      - targets:
+          - __NODE_EXPORTER_SCRAPE_TARGET__

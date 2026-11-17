@@ -576,6 +576,17 @@ actions:
 #       - "mcp-obsidian"
 #       - /path/to/obsidian/vault
 
+modelSpecs:
+  list:
+    - name: "infobhan-local-free"
+      label: "Infobhan Local"
+      description: "Free on-prem chat"
+      default: true
+      group: "Infobhan (Local)"
+      preset:
+        endpoint: "Infobhan (Local)"
+        model: "ministral-3:3b"
+
 # Definition of custom endpoints
 endpoints:
   # assistants:

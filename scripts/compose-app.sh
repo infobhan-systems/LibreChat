@@ -1,10 +1,26 @@
 #!/usr/bin/env bash
 # Run docker compose for the Infobhan app stack with the nginx edge profile
 # derived from DOMAIN_CLIENT in .env.
+# edge-local: docker-compose.yml only (laptop-safe, no Ollama).
+# edge-tls: also merges docker-compose.infobhan.yml (GPU host).
+# Pass --with-gpu to merge the Infobhan overlay even for edge-local.
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"
+
+WITH_GPU=0
+ARGS=()
+for arg in "$@"; do
+  case "$arg" in
+    --with-gpu)
+      WITH_GPU=1
+      ;;
+    *)
+      ARGS+=("$arg")
+      ;;
+  esac
+done
 
 DOMAIN_CLIENT=""
 if [[ -f .env ]]; then
@@ -26,5 +42,16 @@ if [[ "$DOMAIN_CLIENT" =~ ^https:// ]]; then
   fi
 fi
 
-echo "DOMAIN_CLIENT=${DOMAIN_CLIENT:-<unset>} → --profile ${profile}"
-exec docker compose -f docker-compose.yml -f docker-compose.infobhan.yml --profile "$profile" "$@"
+compose_args=(-f docker-compose.yml)
+merge_gpu=0
+if [[ "$WITH_GPU" -eq 1 || "$profile" == "edge-tls" ]]; then
+  compose_args+=(-f docker-compose.infobhan.yml)
+  merge_gpu=1
+fi
+
+gpu_note=""
+if [[ "$merge_gpu" -eq 1 ]]; then
+  gpu_note=" (+infobhan GPU overlay)"
+fi
+echo "DOMAIN_CLIENT=${DOMAIN_CLIENT:-<unset>} → --profile ${profile}${gpu_note}"
+exec docker compose "${compose_args[@]}" --profile "$profile" "${ARGS[@]}"

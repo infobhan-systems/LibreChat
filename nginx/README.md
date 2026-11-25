@@ -1,6 +1,8 @@
 # Infobhan nginx edge
 
-App-machine reverse proxy. Traces and Prometheus scrapes stay on the private network; do not publish `/metrics`.
+App-machine reverse proxy (defined in `docker-compose.yml`). Traces and Prometheus scrapes stay on the private network; do not publish `/metrics`.
+
+Full local and production runbooks (TLS, IP, single vs separate hosts, credentials): [INFOBHAN-DEPLOYMENT.md](../INFOBHAN-DEPLOYMENT.md).
 
 ## Mode (from `DOMAIN_CLIENT`)
 
@@ -10,6 +12,10 @@ App-machine reverse proxy. Traces and Prometheus scrapes stay on the private net
 | anything else (e.g. `http://localhost:3000`) | `edge-local` | 3000 → 80 | `http://localhost:3000`, `http://admin.localhost:3000`, `http://watch.localhost:3000` |
 
 Start with `scripts/compose-app.ps1` or `scripts/compose-app.sh` so the profile is chosen automatically.
+
+- `edge-local` uses `docker-compose.yml` only (no Ollama / GPU exporters).
+- `edge-tls` also merges `docker-compose.infobhan.yml`.
+- Laptop with Ollama: `scripts/compose-app.ps1 -WithGpu up -d` or `scripts/compose-app.sh --with-gpu up -d`.
 
 Set `OBS_PRIVATE_HOST` to the observability machine private IP (Langfuse `:3001`, Grafana `:3002`). LibreChat `LANGFUSE_BASE_URL` must be `http://<that-ip>:3001`, not the public watch URL.
 

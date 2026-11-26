@@ -216,34 +216,37 @@ Replace `<SERVER_IP>` with the host’s address. Prefer TLS when the host has pu
 
 **Unverified here:** certificate issuance and a live TLS start were not run in this documentation pass.
 
-1. **DNS** A/AAAA records: `infobhan.ai`, `admin.infobhan.ai`, `watch.infobhan.ai` → this host.
-2. **Certificates** (after nginx can serve ACME on port 80, or issue offline and copy):
+1. **DNS** A/AAAA records for the chat and admin hosts (must differ), e.g. `chat.infobhan.net`, `admin.infobhan.net` → this host. Do **not** put Langfuse/Grafana on public DNS for the TLS edge (watch is not proxied on 443).
+2. **Certificates** (after nginx can serve ACME on port 80, or issue offline and copy). Names must match the hosts parsed from `DOMAIN_CLIENT` and `ADMIN_PANEL_URL`:
 
 ```bash
 certbot certonly --webroot -w ./nginx/certbot/www \
-  -d infobhan.ai -d admin.infobhan.ai -d watch.infobhan.ai
+  -d chat.infobhan.net -d admin.infobhan.net
 # copy/symlink live certs into:
 #   nginx/certs/fullchain.pem
 #   nginx/certs/privkey.pem
 ```
 
-3. **App `.env`:**
+3. **App** `.env`**:**
 
 ```env
-DOMAIN_CLIENT=https://infobhan.ai
-DOMAIN_SERVER=https://infobhan.ai
-ADMIN_PANEL_URL=https://admin.infobhan.ai
+DOMAIN_CLIENT=https://chat.infobhan.net
+DOMAIN_SERVER=https://chat.infobhan.net
+ADMIN_PANEL_URL=https://admin.infobhan.net
 ADMIN_PANEL_SESSION_COOKIE_SECURE=true
 OBS_PRIVATE_HOST=host.docker.internal
 LANGFUSE_BASE_URL=http://host.docker.internal:3001
 # LANGFUSE_* keys, METRICS_SECRET, JWT_*, CREDS_*, MEILI_MASTER_KEY, ADMIN_PANEL_SESSION_SECRET
 ```
 
-4. **`.env.observability`:**
+nginx `edge-tls` derives `server_name` from those two URLs. Identical hostnames (e.g. path `/admin` on the chat host) are rejected at container start.
+
+4. `.env.observability`**:**
 
 ```env
-LANGFUSE_STACK_NEXTAUTH_URL=https://watch.infobhan.ai
-GF_SERVER_ROOT_URL=https://watch.infobhan.ai/grafana/
+# Browser login for Langfuse/Grafana is private (or VPN), not via app TLS nginx.
+LANGFUSE_STACK_NEXTAUTH_URL=http://127.0.0.1:3001
+GF_SERVER_ROOT_URL=http://127.0.0.1:3002/grafana/
 METRICS_SCRAPE_TARGET=host.docker.internal:3080
 NODE_EXPORTER_SCRAPE_TARGET=host.docker.internal:9100
 NVIDIA_GPU_SCRAPE_TARGET=host.docker.internal:9835
@@ -262,13 +265,13 @@ docker compose --env-file .env.observability -f docker-compose.observability.yml
 # Windows: .\scripts\compose-app.ps1 up -d
 ```
 
-6. **URLs:** `https://infobhan.ai`, `https://admin.infobhan.ai`, `https://watch.infobhan.ai`, `https://watch.infobhan.ai/grafana/`.
+6. **URLs:** `https://chat.infobhan.net`, `https://admin.infobhan.net`. Langfuse/Grafana: `http://127.0.0.1:3001` and `http://127.0.0.1:3002/grafana/` on the host (or the obs private IP).
 
 ### IP path (HTTP)
 
 Use only on a **trusted network or VPN**. No HSTS; admin cookies are not Secure.
 
-1. **App `.env`:**
+1. **App** `.env`**:**
 
 ```env
 DOMAIN_CLIENT=http://<SERVER_IP>:3000
@@ -279,7 +282,7 @@ OBS_PRIVATE_HOST=host.docker.internal
 LANGFUSE_BASE_URL=http://host.docker.internal:3001
 ```
 
-`DOMAIN_CLIENT` with a non-https URL selects **`edge-local`** (host port **3000**).
+`DOMAIN_CLIENT` with a non-https URL selects `edge-local` (host port **3000**).
 
 2. **Start with GPU if needed:**
 
@@ -356,7 +359,7 @@ OLLAMA_EXPORTER_SCRAPE_TARGET=<APP_PRIVATE_IP>:11435
 | Obs → app | **11435** | ollama-exporter |
 | App → obs | **3001** | Langfuse (traces + nginx watch proxy) |
 | App → obs | **3002** | Grafana (nginx `/grafana/`) |
-| Public → obs | **none** | Prefer private bind; browsers use app nginx `watch.*` |
+| Public → obs | **none** | Prefer private bind; TLS edge does not proxy Langfuse/Grafana (local edge still has `watch.localhost`) |
 
 ### TLS path (two hosts)
 
@@ -364,16 +367,16 @@ Same DNS and certificates on the **app** machine as single-machine TLS. Observab
 
 ```env
 # App
-DOMAIN_CLIENT=https://infobhan.ai
-DOMAIN_SERVER=https://infobhan.ai
-ADMIN_PANEL_URL=https://admin.infobhan.ai
+DOMAIN_CLIENT=https://chat.infobhan.net
+DOMAIN_SERVER=https://chat.infobhan.net
+ADMIN_PANEL_URL=https://admin.infobhan.net
 ADMIN_PANEL_SESSION_COOKIE_SECURE=true
 OBS_PRIVATE_HOST=<OBS_PRIVATE_IP>
 LANGFUSE_BASE_URL=http://<OBS_PRIVATE_IP>:3001
 
-# Obs
-LANGFUSE_STACK_NEXTAUTH_URL=https://watch.infobhan.ai
-GF_SERVER_ROOT_URL=https://watch.infobhan.ai/grafana/
+# Obs (private browser access; not published via app TLS nginx)
+LANGFUSE_STACK_NEXTAUTH_URL=http://<OBS_PRIVATE_IP>:3001
+GF_SERVER_ROOT_URL=http://<OBS_PRIVATE_IP>:3002/grafana/
 ```
 
 Start observability on the obs host, then `./scripts/compose-app.sh up -d` on the app host (`edge-tls` + GPU overlay).
@@ -401,12 +404,12 @@ Chat: `http://<APP_IP>:3000`. Langfuse/Grafana: either through hosts-file `watch
 
 There are **no hard-coded default passwords** in the images. Credentials come from env vars or first-run behaviour.
 
-| Surface | How you get access | Default / example value |
-|---|---|---|
-| **infobhan-ai (chat)** | Self-register (`ALLOW_REGISTRATION=true`) or `npm run create-user` | **No seeded user.** First registered account becomes **ADMIN**; later accounts are **USER**. New users get `balance.startBalance` **2_000_000** credits ($2) from `librechat.yaml`. |
-| **admin-panel** | Same LibreChat **ADMIN** account (`ACCESS_ADMIN`) via `POST /api/admin/login/local` | **No separate password.** `ADMIN_PANEL_SESSION_SECRET` is a session encryption key, not a login. |
-| **Langfuse** | Init user from `.env.observability` on **empty** Postgres | Example: email `admin@example.com`, password `change-me-langfuse-user` (`LANGFUSE_INIT_USER_*`). Change before first start. |
-| **Grafana** | Static admin from env | User `GRAFANA_ADMIN_USER` (default **`admin`**), password `GRAFANA_ADMIN_PASSWORD` (example `change-me-grafana-admin`). Sign-up disabled. **Not** synced with LibreChat admins. |
+| Surface                | How you get access                                                                  | Default / example value                                                                                                                                                             |
+| ---------------------- | ----------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **infobhan-ai (chat)** | Self-register (`ALLOW_REGISTRATION=true`) or `npm run create-user`                  | **No seeded user.** First registered account becomes **ADMIN**; later accounts are **USER**. New users get `balance.startBalance` **2_000_000** credits ($2) from `librechat.yaml`. |
+| **admin-panel**        | Same LibreChat **ADMIN** account (`ACCESS_ADMIN`) via `POST /api/admin/login/local` | **No separate password.** `ADMIN_PANEL_SESSION_SECRET` is a session encryption key, not a login.                                                                                    |
+| **Langfuse**           | Init user from `.env.observability` on **empty** Postgres                           | Example: email `admin@example.com`, password `change-me-langfuse-user` (`LANGFUSE_INIT_USER_`*). Change before first start.                                                         |
+| **Grafana**            | Static admin from env                                                               | User `GRAFANA_ADMIN_USER` (default `admin`), password `GRAFANA_ADMIN_PASSWORD` (example `change-me-grafana-admin`). Sign-up disabled. **Not** synced with LibreChat admins.         |
 
 ### Bootstrap steps
 
@@ -448,22 +451,24 @@ There are **no hard-coded default passwords** in the images. Credentials come fr
 
 ### Production TLS (`edge-tls`)
 
-| Service | Host port | Browser URL |
-|---|---|---|
-| nginx HTTP → HTTPS | 80 → 443 | https://infobhan.ai |
-| Admin | 443 | https://admin.infobhan.ai |
-| Langfuse via nginx | 443 | https://watch.infobhan.ai |
-| Grafana via nginx | 443 | https://watch.infobhan.ai/grafana/ |
-| Private metrics / exporters | 3080, 9100, 9835, 11435 | Scraped by Prometheus only |
+Hostnames come from `DOMAIN_CLIENT` and `ADMIN_PANEL_URL` (must differ). Example:
+
+| Service                     | Host port               | Browser URL                                             |
+| --------------------------- | ----------------------- | ------------------------------------------------------- |
+| nginx HTTP → HTTPS          | 80 → 443                | [https://chat.infobhan.ai](https://chat.infobhan.net)   |
+| Admin                       | 443                     | [https://admin.infobhan.ai](https://admin.infobhan.net) |
+| Langfuse                    | 3001 (private)          | http://OBS_IP:3001 (not on public TLS edge)             |
+| Grafana                     | 3002 (private)          | http://OBS_IP:3002/grafana/                             |
+| Private metrics / exporters | 3080, 9100, 9835, 11435 | Scraped by Prometheus only                              |
 
 ### Production IP (`edge-local` + optional `-WithGpu`)
 
-| Service | Host port | Browser URL |
-|---|---|---|
-| Chat | 3000 | http://\<SERVER_IP\>:3000 |
-| Admin | — | http://admin.localhost:3000 (hosts → SERVER_IP) |
-| Langfuse direct | 3001 | http://\<SERVER_IP_OR_OBS\>:3001 |
-| Grafana direct | 3002 | http://\<SERVER_IP_OR_OBS\>:3002/grafana/ |
+| Service         | Host port | Browser URL                                     |
+| --------------- | --------- | ----------------------------------------------- |
+| Chat            | 3000      | http://SERVER_IP:3000                           |
+| Admin           | —         | http://admin.localhost:3000 (hosts → SERVER_IP) |
+| Langfuse direct | 3001      | http://SERVER_IP_OR_OBS:3001                    |
+| Grafana direct  | 3002      | http://SERVER_IP_OR_OBS:3002/grafana/           |
 
 ---
 
@@ -542,7 +547,7 @@ docker exec -it infobhan-ai npm run ban-user
 | Port 3000 already in use | Another process or old admin publish | Stop the other listener; admin has no host port in this compose |
 | Ollama never healthy / api waits forever | GPU overlay without NVIDIA / model pull | Use laptop without `-WithGpu`, or fix GPU runtime; healthcheck waits for pulled models |
 | Prometheus targets down | Wrong scrape IP/port or `METRICS_SECRET` mismatch | Align targets and secrets; check private binds |
-| nginx-tls exits on start | Missing `nginx/certs/fullchain.pem` or `privkey.pem` | Place certs before `edge-tls` |
+| nginx-tls exits on start | Missing certs, missing `DOMAIN_CLIENT`/`ADMIN_PANEL_URL`, or identical hostnames | Place `nginx/certs/*`; set two different URL hosts; see container logs |
 | Traces never appear | `LANGFUSE_BASE_URL` uses `langfuse-web` or public watch URL from app | Use `http://host.docker.internal:3001` or `http://<OBS_PRIVATE_IP>:3001` |
 | Infobhan (Local) models fail | Ollama not in this compose project | Start with `-WithGpu` / `edge-tls`, or use cloud endpoints |
 
@@ -552,11 +557,11 @@ docker exec -it infobhan-ai npm run ban-user
 
 Findings from the current stack that break or weaken a first deploy if left unchanged:
 
-1. **`LANGFUSE_BASE_URL`** must not be `http://langfuse-web:3000` from the app stack (that hostname exists only on the observability Compose network). Use `host.docker.internal:3001` (same machine) or the obs private IP.
-2. **`JWT_SECRET`, `JWT_REFRESH_SECRET`, `CREDS_KEY`, `CREDS_IV`** must be set for production (empty values are unsafe / may rely on disposable temp credentials).
-3. **`rag_api`** needs embeddings credentials or it will crash-loop; file/RAG features stay broken until fixed.
+1. `LANGFUSE_BASE_URL` must not be `http://langfuse-web:3000` from the app stack (that hostname exists only on the observability Compose network). Use `host.docker.internal:3001` (same machine) or the obs private IP.
+2. `JWT_SECRET`**,** `JWT_REFRESH_SECRET`**,** `CREDS_KEY`**,** `CREDS_IV` must be set for production (empty values are unsafe / may rely on disposable temp credentials).
+3. `rag_api` needs embeddings credentials or it will crash-loop; file/RAG features stay broken until fixed.
 4. **Rotate secrets** if `.env` was ever shared or committed (Langfuse keys, stack passwords, session secrets).
-5. **`Infobhan (Local)`** in `librechat.yaml` requires the Ollama service from `docker-compose.infobhan.yml`.
+5. `Infobhan (Local)` in `librechat.yaml` requires the Ollama service from `docker-compose.infobhan.yml`.
 6. **Open registration** (`ALLOW_REGISTRATION=true`) with no `registration.allowedDomains` lets anyone create an account and receive the starting balance. Restrict before exposing the host publicly.
 
 ---
@@ -579,5 +584,5 @@ Findings from the current stack that break or weaken a first deploy if left unch
 |---|---|
 | Local app (no GPU) | `.\scripts\compose-app.ps1 up -d` / `./scripts/compose-app.sh up -d` |
 | Local or IP app + Ollama | `.\scripts\compose-app.ps1 -WithGpu up -d` / `./scripts/compose-app.sh --with-gpu up -d` |
-| TLS production app | Set `DOMAIN_CLIENT=https://infobhan.ai`, then compose-app `up -d` |
+| TLS production app | Set `DOMAIN_CLIENT` / `ADMIN_PANEL_URL` to different https hosts, then compose-app `up -d` |
 | Observability | `docker compose --env-file .env.observability -f docker-compose.observability.yml up -d` |

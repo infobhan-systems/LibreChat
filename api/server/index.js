@@ -310,6 +310,19 @@ const startServer = async () => {
     }
   }
 
+  /* Align the SPA shell <title>/meta with APP_TITLE so the first paint and View Source
+     match the configured brand (not only the post-hydration document.title). */
+  {
+    const shellTitle = process.env.APP_TITLE || 'Infobhan AI';
+    const shellDescription =
+      process.env.APP_DESCRIPTION || 'Infobhan AI — secure AI chat for your organization';
+    indexHTML = indexHTML.replace(/<title>[^<]*<\/title>/i, `<title>${shellTitle}</title>`);
+    indexHTML = indexHTML.replace(
+      /(<meta\s+name=["']description["']\s+content=["'])[^"']*(["'])/i,
+      `$1${shellDescription.replace(/"/g, '&quot;')}$2`,
+    );
+  }
+
   /* The composer lays out against whether a footer bar sits beneath it, and
      `/api/config` answers that only after it has painted. One shell serves every
      request, before there is a caller whose overrides could be resolved, so the

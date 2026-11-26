@@ -11,7 +11,7 @@ const mongoose = require('mongoose');
  * style, inline script, a module entry, and the module preloads Vite emits.
  */
 const INDEX_HTML =
-  '<!DOCTYPE html><html lang="en-US"><head><title>LibreChat</title>' +
+  '<!DOCTYPE html><html lang="en-US"><head><title>Infobhan AI</title>' +
   '<style>body{margin:0}</style>' +
   '<script>window.theme="dark";</script>' +
   '<link rel="modulepreload" crossorigin href="./assets/chunk.js">' +

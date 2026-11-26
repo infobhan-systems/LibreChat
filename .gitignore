@@ -68,7 +68,9 @@ api/tsconfig.json
 .cursor
 .aider*
 .bg-shell/
+ollama/
 
+*.log
 # Floobits
 .floo
 .floobit
@@ -76,8 +78,8 @@ api/tsconfig.json
 .flooignore
 
 #config file
-librechat.yaml
-librechat.yml
+# librechat.yaml
+# librechat.yml
 
 # Environment
 .env*
@@ -112,7 +114,6 @@ junit.xml
 
 # docker override file
 docker-compose.override.yaml
-docker-compose.override.yml
 
 # meilisearch
 meilisearch

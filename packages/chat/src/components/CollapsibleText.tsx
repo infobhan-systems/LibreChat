@@ -110,22 +110,23 @@ const CollapsibleText: NamedExoticComponent<CollapsibleTextProps> = memo(functio
         )}
       </div>
       {overflowing && (
-        <Button
-          type="button"
-          variant="link"
-          size="bare"
-          onClick={() => setExpanded((prev) => !prev)}
-          aria-expanded={expanded}
-          aria-controls={contentId}
-          className="mt-1 gap-1 text-xs"
-        >
-          {expanded ? (
-            <ChevronUp className="h-3.5 w-3.5" aria-hidden="true" />
-          ) : (
-            <ChevronDown className="h-3.5 w-3.5" aria-hidden="true" />
-          )}
-          {localize(expanded ? 'com_ui_show_less' : 'com_ui_show_more')}
-        </Button>
+        <div className="mt-1">
+          <Button
+            type="button"
+            variant="link"
+            size="bare"
+            onClick={() => setExpanded((prev) => !prev)}
+            aria-expanded={expanded}
+            aria-controls={contentId}
+          >
+            {expanded ? (
+              <ChevronUp className="h-3.5 w-3.5" aria-hidden="true" />
+            ) : (
+              <ChevronDown className="h-3.5 w-3.5" aria-hidden="true" />
+            )}
+            {localize(expanded ? 'com_ui_show_less' : 'com_ui_show_more')}
+          </Button>
+        </div>
       )}
     </div>
   );

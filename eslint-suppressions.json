@@ -40,11 +40,6 @@
       "count": 2
     }
   },
-  "client/src/components/Auth/PasskeySignIn.tsx": {
-    "design/disabled-recipe": {
-      "count": 1
-    }
-  },
   "client/src/components/Auth/TwoFactorScreen.tsx": {
     "shadcn/no-restyle": {
       "count": 1
@@ -94,19 +89,9 @@
       "count": 2
     }
   },
-  "client/src/components/Chat/Input/Composer/Files.tsx": {
-    "design/disabled-recipe": {
-      "count": 1
-    }
-  },
   "client/src/components/Chat/Input/ConversationStarters.tsx": {
     "shadcn/no-inline-styles": {
       "count": 2
-    }
-  },
-  "client/src/components/Chat/Input/EscalateNowButton.tsx": {
-    "design/disabled-recipe": {
-      "count": 1
     }
   },
   "client/src/components/Chat/Input/Files/DragDropOverlay.tsx": {
@@ -194,11 +179,6 @@
   "client/src/components/Chat/Input/TokenUsage/Breakdown.tsx": {
     "shadcn/no-restyle": {
       "count": 10
-    }
-  },
-  "client/src/components/Chat/Input/chip.ts": {
-    "design/disabled-recipe": {
-      "count": 1
     }
   },
   "client/src/components/Chat/Landing.tsx": {
@@ -1428,25 +1408,6 @@
   },
   "client/src/utils/index.ts": {
     "design/disabled-recipe": {
-      "count": 1
-    }
-  },
-  "packages/chat/src/components/CollapsibleText.tsx": {
-    "shadcn/no-restyle": {
-      "count": 2
-    }
-  },
-  "packages/chat/src/components/Summary.tsx": {
-    "shadcn/no-arbitrary-values": {
-      "count": 1
-    },
-    "shadcn/no-inline-styles": {
-      "count": 1
-    },
-    "shadcn/no-restyle": {
-      "count": 9
-    },
-    "shadcn/require-static-classes": {
       "count": 1
     }
   },

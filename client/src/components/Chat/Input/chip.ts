@@ -1,4 +1,4 @@
-import { cn, composerControlClasses } from '@librechat/client';
+import { cn, composerControlClasses, disabledInkClasses } from '@librechat/client';
 
 /** One compact pill for every control in the composer's context rail (project, machine,
  *  workspace, branch, worktree, approval mode), so the rail reads as a single set. */
@@ -33,5 +33,6 @@ export const chipMenuItemClasses = (selected = false) =>
     'outline-hidden transition-colors duration-theme-fast',
     'hover:bg-surface-hover data-[active-item]:bg-surface-hover',
     'aria-disabled:cursor-not-allowed aria-disabled:opacity-50',
+    disabledInkClasses,
     selected && 'bg-surface-active-alt',
   );

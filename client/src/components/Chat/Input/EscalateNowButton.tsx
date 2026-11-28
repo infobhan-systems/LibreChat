@@ -1,11 +1,10 @@
 import { useEffect, useId, useSyncExternalStore } from 'react';
 import { ArrowUp } from 'lucide-react';
 import * as Ariakit from '@ariakit/react';
-import { Button, IconButton } from '@librechat/client';
+import { Button, IconButton, cn, disabledWithinFillClasses } from '@librechat/client';
 import { useShortcutAriaKey, useShortcutDisplay } from '~/hooks/useKeyboardShortcuts';
 import { getChatPane, getFocusedChatPane } from '~/utils/pane';
 import { useLocalize } from '~/hooks';
-import { cn } from '~/utils';
 
 /** Longest message excerpt spoken as part of the button's accessible name;
  *  past this the row is identified by its opening words rather than read out. */
@@ -165,7 +164,13 @@ export default function EscalateNowButton({
     <Ariakit.TooltipProvider placement="top" timeout={300}>
       {/* The disabled IconButton already renders at half opacity; 70% of that
           is the 35% this control has always dimmed to. */}
-      <span className={cn('transition-opacity', disabled && 'opacity-70')}>
+      <span
+        className={cn(
+          'transition-opacity',
+          disabled && 'opacity-70',
+          disabled && disabledWithinFillClasses,
+        )}
+      >
         <Ariakit.TooltipAnchor
           render={
             surface === 'bubble' ? (

@@ -1,7 +1,14 @@
 import { memo, useRef, useMemo, useState, useEffect } from 'react';
 import { Eye, Search } from 'lucide-react';
 import { apiBaseUrl } from 'librechat-data-provider';
-import { Button, IconButton, Spinner, useToastContext } from '@librechat/client';
+import {
+  Button,
+  IconButton,
+  Spinner,
+  cn,
+  disabledFillClasses,
+  useToastContext,
+} from '@librechat/client';
 import type { TFile } from 'librechat-data-provider';
 import type { TranslationKeys } from '~/hooks';
 import FilePreviewDialog, {
@@ -108,7 +115,10 @@ const FileCard = memo(function FileCard({ file, onAttach, onPreview, disabled }:
         type="button"
         onClick={() => onAttach(file)}
         disabled={disabled}
-        className="focus-visible:ring-ring-primary flex h-full w-full cursor-pointer flex-col gap-2 rounded-2xl p-4 text-start focus:outline-hidden focus-visible:ring-2 disabled:cursor-not-allowed disabled:opacity-50"
+        className={cn(
+          'focus-visible:ring-ring-primary flex h-full w-full cursor-pointer flex-col gap-2 rounded-2xl p-4 text-start focus:outline-hidden focus-visible:ring-2 disabled:cursor-not-allowed disabled:opacity-50',
+          disabledFillClasses,
+        )}
       >
         <span className="flex w-full min-w-0 items-start gap-3">
           <Thumbnail file={file} />

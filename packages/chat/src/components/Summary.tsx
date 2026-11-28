@@ -1,7 +1,7 @@
 import { memo, useMemo, useState, useCallback, useRef, useId, useEffect } from 'react';
 import { Copy, Check } from 'lucide';
 import { ScrollText, ChevronDown, ChevronUp } from 'lucide-react';
-import { cn, Button, MorphIcon, useLocalize, TooltipAnchor } from '@librechat/client';
+import { cn, MorphIcon, useLocalize, TooltipAnchor } from '@librechat/client';
 import type { MouseEvent, FocusEvent, NamedExoticComponent } from 'react';
 import type { SummaryContentPart } from 'librechat-data-provider';
 import { useMessagePartsHost } from '../react/host';
@@ -74,13 +74,13 @@ const SummaryButton = memo(
 
     return (
       <div className="group/summary flex w-full items-center justify-between gap-2">
-        <Button
-          variant="disclosure"
+        <button
+          type="button"
           onClick={onClick}
           aria-expanded={isExpanded}
           aria-controls={contentId}
           className={cn(
-            'group/button flex-1 gap-0 rounded-lg leading-[18px] font-normal',
+            'group/button text-text-secondary hover:text-text-primary focus-visible:ring-focus-subtle inline-flex flex-1 items-center rounded-lg leading-none font-normal focus-visible:ring-2 focus-visible:outline-hidden',
             fontSize,
           )}
         >
@@ -98,26 +98,32 @@ const SummaryButton = memo(
             />
           </span>
           <span>{label}</span>
-        </Button>
+        </button>
         {content && showCopyButton && (
-          <Button
-            variant="message-action"
-            onClick={onCopy}
-            aria-label={
-              isCopied ? localize('com_ui_copied_to_clipboard') : localize('com_ui_copy_summary')
-            }
+          <div
             className={cn(
               isExpanded
                 ? 'opacity-0 group-focus-within/summary-container:opacity-100 group-hover/summary-container:opacity-100'
                 : 'opacity-0',
-              'focus-visible:opacity-100',
+              'focus-within:opacity-100',
             )}
           >
-            <span className="sr-only">
-              {isCopied ? localize('com_ui_copied_to_clipboard') : localize('com_ui_copy_summary')}
-            </span>
-            <MorphIcon icon={isCopied ? Check : Copy} className="h-[1.125rem] w-[1.125rem]" />
-          </Button>
+            <button
+              type="button"
+              onClick={onCopy}
+              aria-label={
+                isCopied ? localize('com_ui_copied_to_clipboard') : localize('com_ui_copy_summary')
+              }
+              className="text-text-secondary hover:text-text-primary focus-visible:ring-focus-subtle inline-flex items-center justify-center rounded-lg p-1.5 focus-visible:ring-2 focus-visible:outline-hidden"
+            >
+              <span className="sr-only">
+                {isCopied
+                  ? localize('com_ui_copied_to_clipboard')
+                  : localize('com_ui_copy_summary')}
+              </span>
+              <MorphIcon icon={isCopied ? Check : Copy} className="h-[1.125rem] w-[1.125rem]" />
+            </button>
+          </div>
         )}
       </div>
     );
@@ -294,10 +300,10 @@ const Summary: NamedExoticComponent<SummaryProps> = memo(
             role="region"
             aria-label={label}
             aria-hidden={!isExpanded || undefined}
-            className={cn('grid transition-all duration-300 ease-out', isExpanded && 'mb-4')}
-            style={{
-              gridTemplateRows: isExpanded ? '1fr' : '0fr',
-            }}
+            className={cn(
+              'grid transition-all duration-300 ease-out',
+              isExpanded ? 'mb-4 grid-rows-[1fr]' : 'grid-rows-[0fr]',
+            )}
           >
             <div className="relative overflow-hidden">
               <SummaryContent meta={meta}>{text}</SummaryContent>

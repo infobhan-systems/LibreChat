@@ -1,6 +1,5 @@
 import { useEffect } from 'react';
 import { useRecoilState } from 'recoil';
-import TagManager from 'react-gtm-module';
 import { installCloudFrontImageRetry } from '@librechat/client';
 import {
   getTokenHeader,
@@ -14,6 +13,7 @@ import { cleanupTimestampedStorage } from '~/utils/timestamps';
 import useSpeechSettingsInit from './useSpeechSettingsInit';
 import { useHasAccess, useCatalogReady } from '~/hooks';
 import { useMCPServersQuery } from '~/data-provider';
+import { setDocumentTitle } from '~/utils';
 import store from '~/store';
 
 export default function useAppStartup({
@@ -43,40 +43,10 @@ export default function useAppStartup({
   /** Set the app title */
   useEffect(() => {
     const appTitle = startupConfig?.appTitle ?? '';
-    // #region agent log
-    {
-      const faviconHrefs = Array.from(
-        document.querySelectorAll('link[rel="icon"], link[rel="apple-touch-icon"]'),
-      ).map((el) => (el as HTMLLinkElement).href);
-      const metaDescription =
-        document.querySelector('meta[name="description"]')?.getAttribute('content') ?? null;
-      const storedTitle = localStorage.getItem(LocalStorageKeys.APP_TITLE);
-      fetch('http://127.0.0.1:7415/ingest/2fe0b457-50fa-426a-b6b7-bf9ada7ea33a', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '2a1742' },
-        body: JSON.stringify({
-          sessionId: '2a1742',
-          runId: 'post-fix',
-          hypothesisId: 'A,B,C,D,E',
-          location: 'client/src/hooks/Config/useAppStartup.ts:setTitle',
-          message: 'client title/favicon state',
-          data: {
-            configAppTitle: appTitle || null,
-            documentTitleBefore: document.title,
-            metaDescription,
-            faviconHrefs,
-            storedTitle,
-            willSetTitle: !!appTitle,
-          },
-          timestamp: Date.now(),
-        }),
-      }).catch(() => {});
-    }
-    // #endregion
     if (!appTitle) {
       return;
     }
-    document.title = appTitle;
+    setDocumentTitle(appTitle, true);
     localStorage.setItem(LocalStorageKeys.APP_TITLE, appTitle);
   }, [startupConfig]);
 
@@ -109,13 +79,4 @@ export default function useAppStartup({
   useEffect(() => {
     return installCloudFrontImageRetry(startupConfig, { getAuthorizationHeader: getTokenHeader });
   }, [startupConfig]);
-
-  useEffect(() => {
-    if (startupConfig?.analyticsGtmId != null && typeof window.google_tag_manager === 'undefined') {
-      const tagManagerArgs = {
-        gtmId: startupConfig.analyticsGtmId,
-      };
-      TagManager.initialize(tagManagerArgs);
-    }
-  }, [startupConfig?.analyticsGtmId]);
 }

@@ -13,7 +13,11 @@ import {
   validateSettingDefinitions,
 } from 'librechat-data-provider';
 import type { TCustomConfig, TEndpoint } from 'librechat-data-provider';
+import type { ConfigOverrideIssue } from '@librechat/data-schemas';
 import type { ZodIssue } from 'zod';
+import { isAgentInferenceExtension } from '../agents/inference';
+import { checkConfigPolicyLinks } from './interface';
+import { checkConfigTheme } from './theme';
 
 type CustomParams = NonNullable<TEndpoint['customParams']>;
 type CustomParamDefinition = NonNullable<CustomParams['paramDefinitions']>[number];
@@ -41,6 +45,40 @@ export class ConfigReloadError extends Error {
     this.cause = cause;
     this.validationErrors = validationErrors;
   }
+}
+
+/**
+ * Why librechat.yaml did not load again: `CONFIG_INVALID` when the loader refused the file
+ * (missing, unreadable or not fetched, unparseable, or failing `configSchema`, whose issues it
+ * lists by location), `LOAD_FAILED` when anything else failed, such as building the config from
+ * a file that loaded. The instance keeps its last good config.
+ */
+export type ConfigLoadFailure =
+  | { code: 'CONFIG_INVALID'; issues: ConfigOverrideIssue[] }
+  | { code: 'LOAD_FAILED' };
+
+export type ConfigLoadResult = { ok: true } | { ok: false; error: ConfigLoadFailure };
+
+function toLoadIssue(segments: string[], code: string): ConfigOverrideIssue {
+  return { path: segments.join('.'), segments, code };
+}
+
+/**
+ * Locations and zod codes only, since schema messages can echo the file's values; an
+ * unrecognized key is reported at its own location.
+ */
+export function getConfigLoadFailure(error: unknown): ConfigLoadFailure {
+  if (!(error instanceof ConfigReloadError)) {
+    return { code: 'LOAD_FAILED' };
+  }
+  const issues = (error.validationErrors ?? []).flatMap((issue) => {
+    const segments = issue.path.map(String);
+    if (issue.code !== 'unrecognized_keys') {
+      return [toLoadIssue(segments, issue.code)];
+    }
+    return issue.keys.map((key) => toLoadIssue([...segments, key], issue.code));
+  });
+  return { code: 'CONFIG_INVALID', issues };
 }
 
 const OPENROUTER_PROMPT_CACHE_DEFAULT = {
@@ -122,8 +160,8 @@ function parseCustomParams(endpointName: string | undefined, customParams: Custo
     defaultParams.map((param) => [param.key, param as CustomParamDefinition]),
   );
   const invalidKeys = paramDefinitions
-    .map((param) => param.key)
-    .filter((key) => !defaultParamsMap.has(key));
+    .filter((param) => !defaultParamsMap.has(param.key) && !isAgentInferenceExtension(param))
+    .map((param) => param.key);
   if (invalidKeys.length > 0) {
     throw new Error(
       `paramDefinitions of "${endpointName}" endpoint contains invalid key(s). ` +
@@ -152,6 +190,31 @@ function parseCustomParams(endpointName: string | undefined, customParams: Custo
 
 function isRemoteConfigPath(configPath: string): boolean {
   return /^https?:\/\//.test(configPath);
+}
+
+function reportPolicyLinkCheck(configPath: string, dropped: string[]): void {
+  if (dropped.length === 0) {
+    return;
+  }
+  logger.warn(
+    `Ignoring policy links in ${configPath} that are not http(s), mailto:, tel: or relative URLs; no link is published for them:\n` +
+      dropped.map((path) => `- ${path}`).join('\n'),
+  );
+}
+
+function reportThemeCheck(configPath: string, errors: string[], warnings: string[]): void {
+  if (errors.length > 0) {
+    logger.warn(
+      `Ignoring interface.theme in ${configPath}; the default theme applies instead:\n` +
+        errors.map((error) => `- ${error}`).join('\n'),
+    );
+  }
+  if (warnings.length > 0) {
+    logger.warn(
+      `interface.theme in ${configPath} names tokens this version ignores:\n` +
+        warnings.map((warning) => `- ${warning}`).join('\n'),
+    );
+  }
 }
 
 /** Creates one process-local custom-config reader. */
@@ -241,6 +304,13 @@ export function createCustomConfigLoader({
           );
         }
       }
+
+      const themeCheck = checkConfigTheme(loadedConfig);
+      loadedConfig = themeCheck.config;
+      reportThemeCheck(configPath, themeCheck.errors, themeCheck.warnings);
+      const linkCheck = checkConfigPolicyLinks(loadedConfig);
+      loadedConfig = linkCheck.config;
+      reportPolicyLinkCheck(configPath, linkCheck.dropped);
 
       setMaxSubagents(getConfiguredMaxSubagents(loadedConfig));
       const result = configSchema.strict().safeParse(loadedConfig);

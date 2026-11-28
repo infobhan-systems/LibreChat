@@ -1,0 +1,202 @@
+# Observability stack for a separate machine: Langfuse, Prometheus, and Grafana.
+# Start with:
+#   docker compose --env-file .env.observability -f docker-compose.observability.yml up -d
+# Do not run plain `docker compose up` on this host; that starts LibreChat.
+
+name: librechat-observability
+
+x-langfuse-env: &langfuse-env
+  NEXTAUTH_URL: ${LANGFUSE_STACK_NEXTAUTH_URL}
+  DATABASE_URL: postgresql://${LANGFUSE_STACK_POSTGRES_USER}:${LANGFUSE_STACK_POSTGRES_PASSWORD}@langfuse-postgres:5432/${LANGFUSE_STACK_POSTGRES_DB}
+  SALT: ${LANGFUSE_STACK_SALT}
+  ENCRYPTION_KEY: ${LANGFUSE_STACK_ENCRYPTION_KEY}
+  TELEMETRY_ENABLED: "false"
+  LANGFUSE_ENABLE_EXPERIMENTAL_FEATURES: "false"
+  CLICKHOUSE_MIGRATION_URL: clickhouse://langfuse-clickhouse:9000
+  CLICKHOUSE_URL: http://langfuse-clickhouse:8123
+  CLICKHOUSE_USER: ${LANGFUSE_STACK_CLICKHOUSE_USER}
+  CLICKHOUSE_PASSWORD: ${LANGFUSE_STACK_CLICKHOUSE_PASSWORD}
+  CLICKHOUSE_CLUSTER_ENABLED: "false"
+  LANGFUSE_S3_EVENT_UPLOAD_BUCKET: langfuse
+  LANGFUSE_S3_EVENT_UPLOAD_REGION: auto
+  LANGFUSE_S3_EVENT_UPLOAD_ACCESS_KEY_ID: ${LANGFUSE_STACK_MINIO_USER}
+  LANGFUSE_S3_EVENT_UPLOAD_SECRET_ACCESS_KEY: ${LANGFUSE_STACK_MINIO_PASSWORD}
+  LANGFUSE_S3_EVENT_UPLOAD_ENDPOINT: http://langfuse-minio:9000
+  LANGFUSE_S3_EVENT_UPLOAD_FORCE_PATH_STYLE: "true"
+  LANGFUSE_S3_EVENT_UPLOAD_PREFIX: events/
+  LANGFUSE_S3_MEDIA_UPLOAD_BUCKET: langfuse
+  LANGFUSE_S3_MEDIA_UPLOAD_REGION: auto
+  LANGFUSE_S3_MEDIA_UPLOAD_ACCESS_KEY_ID: ${LANGFUSE_STACK_MINIO_USER}
+  LANGFUSE_S3_MEDIA_UPLOAD_SECRET_ACCESS_KEY: ${LANGFUSE_STACK_MINIO_PASSWORD}
+  LANGFUSE_S3_MEDIA_UPLOAD_ENDPOINT: http://langfuse-minio:9000
+  LANGFUSE_S3_MEDIA_UPLOAD_FORCE_PATH_STYLE: "true"
+  LANGFUSE_S3_MEDIA_UPLOAD_PREFIX: media/
+  REDIS_HOST: langfuse-redis
+  REDIS_PORT: "6379"
+  REDIS_AUTH: ${LANGFUSE_STACK_REDIS_AUTH}
+
+x-langfuse-depends: &langfuse-depends
+  langfuse-postgres:
+    condition: service_healthy
+  langfuse-minio:
+    condition: service_healthy
+  langfuse-redis:
+    condition: service_healthy
+  langfuse-clickhouse:
+    condition: service_healthy
+
+services:
+  langfuse-worker:
+    image: docker.langfuse.com/langfuse/langfuse-worker:4
+    restart: always
+    depends_on: *langfuse-depends
+    environment:
+      <<: *langfuse-env
+
+  langfuse-web:
+    image: docker.langfuse.com/langfuse/langfuse:4
+    restart: always
+    depends_on: *langfuse-depends
+    ports:
+      # Reachable from the LibreChat app machine. Prefer a private bind in production.
+      - "${LANGFUSE_WEB_BIND:-0.0.0.0}:${LANGFUSE_WEB_PORT:-3001}:3000"
+    environment:
+      <<: *langfuse-env
+      # Next.js otherwise binds to the container hostname, which the published port cannot reach.
+      HOSTNAME: 0.0.0.0
+      NEXTAUTH_SECRET: ${LANGFUSE_STACK_NEXTAUTH_SECRET}
+      LANGFUSE_S3_MEDIA_UPLOAD_INTERNAL_ENDPOINT: http://langfuse-minio:9000
+      LANGFUSE_INIT_ORG_ID: ${LANGFUSE_INIT_ORG_ID}
+      LANGFUSE_INIT_ORG_NAME: ${LANGFUSE_INIT_ORG_NAME}
+      LANGFUSE_INIT_PROJECT_ID: ${LANGFUSE_INIT_PROJECT_ID}
+      LANGFUSE_INIT_PROJECT_NAME: ${LANGFUSE_INIT_PROJECT_NAME}
+      LANGFUSE_INIT_PROJECT_PUBLIC_KEY: ${LANGFUSE_PUBLIC_KEY}
+      LANGFUSE_INIT_PROJECT_SECRET_KEY: ${LANGFUSE_SECRET_KEY}
+      LANGFUSE_INIT_USER_EMAIL: ${LANGFUSE_INIT_USER_EMAIL}
+      LANGFUSE_INIT_USER_NAME: ${LANGFUSE_INIT_USER_NAME}
+      LANGFUSE_INIT_USER_PASSWORD: ${LANGFUSE_INIT_USER_PASSWORD}
+
+  langfuse-clickhouse:
+    image: docker.io/clickhouse/clickhouse-server:25.12
+    restart: always
+    user: "101:101"
+    environment:
+      CLICKHOUSE_DB: default
+      CLICKHOUSE_USER: ${LANGFUSE_STACK_CLICKHOUSE_USER}
+      CLICKHOUSE_PASSWORD: ${LANGFUSE_STACK_CLICKHOUSE_PASSWORD}
+    volumes:
+      - langfuse_clickhouse_data:/var/lib/clickhouse
+      - langfuse_clickhouse_logs:/var/log/clickhouse-server
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8123/ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 20s
+
+  langfuse-minio:
+    image: cgr.dev/chainguard/minio
+    restart: always
+    entrypoint: ["sh"]
+    command: ["-c", "mkdir -p /data/langfuse && minio server --address :9000 --console-address :9001 /data"]
+    environment:
+      MINIO_ROOT_USER: ${LANGFUSE_STACK_MINIO_USER}
+      MINIO_ROOT_PASSWORD: ${LANGFUSE_STACK_MINIO_PASSWORD}
+    volumes:
+      - langfuse_minio_data:/data
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 10s
+
+  langfuse-redis:
+    image: docker.io/redis:7
+    restart: always
+    command: ["redis-server", "--requirepass", "${LANGFUSE_STACK_REDIS_AUTH}", "--maxmemory-policy", "noeviction"]
+    environment:
+      REDISCLI_AUTH: ${LANGFUSE_STACK_REDIS_AUTH}
+    volumes:
+      - langfuse_redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 5s
+
+  langfuse-postgres:
+    image: docker.io/postgres:17
+    restart: always
+    environment:
+      POSTGRES_USER: ${LANGFUSE_STACK_POSTGRES_USER}
+      POSTGRES_PASSWORD: ${LANGFUSE_STACK_POSTGRES_PASSWORD}
+      POSTGRES_DB: ${LANGFUSE_STACK_POSTGRES_DB}
+      TZ: UTC
+      PGTZ: UTC
+    volumes:
+      - langfuse_postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${LANGFUSE_STACK_POSTGRES_USER} -d ${LANGFUSE_STACK_POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 10s
+
+  prometheus:
+    image: docker.io/prom/prometheus:v2.55.1
+    restart: always
+    # Not published. Grafana reaches this service on the Compose network.
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        set -eu
+        sed \
+          -e "s|__METRICS_SCRAPE_TARGET__|$${METRICS_SCRAPE_TARGET}|g" \
+          -e "s|__METRICS_SECRET__|$${METRICS_SECRET}|g" \
+          -e "s|__NVIDIA_GPU_SCRAPE_TARGET__|$${NVIDIA_GPU_SCRAPE_TARGET}|g" \
+          -e "s|__OLLAMA_EXPORTER_SCRAPE_TARGET__|$${OLLAMA_EXPORTER_SCRAPE_TARGET}|g" \
+          -e "s|__NODE_EXPORTER_SCRAPE_TARGET__|$${NODE_EXPORTER_SCRAPE_TARGET}|g" \
+          /etc/prometheus/prometheus.yml.template > /tmp/prometheus.yml
+        exec /bin/prometheus \
+          --config.file=/tmp/prometheus.yml \
+          --storage.tsdb.path=/prometheus \
+          --web.enable-lifecycle
+    environment:
+      METRICS_SCRAPE_TARGET: ${METRICS_SCRAPE_TARGET}
+      METRICS_SECRET: ${METRICS_SECRET}
+      NVIDIA_GPU_SCRAPE_TARGET: ${NVIDIA_GPU_SCRAPE_TARGET}
+      OLLAMA_EXPORTER_SCRAPE_TARGET: ${OLLAMA_EXPORTER_SCRAPE_TARGET}
+      NODE_EXPORTER_SCRAPE_TARGET: ${NODE_EXPORTER_SCRAPE_TARGET}
+    volumes:
+      - ./observability/prometheus.yml.template:/etc/prometheus/prometheus.yml.template:ro
+      - prometheus_data:/prometheus
+
+  grafana:
+    image: docker.io/grafana/grafana:11.3.1
+    restart: always
+    depends_on:
+      - prometheus
+    ports:
+      - "${GRAFANA_BIND:-0.0.0.0}:${GRAFANA_PORT:-3002}:3000"
+    environment:
+      GF_SECURITY_ADMIN_USER: ${GRAFANA_ADMIN_USER:-admin}
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD}
+      GF_USERS_ALLOW_SIGN_UP: "false"
+      GF_PATHS_PROVISIONING: /etc/grafana/provisioning
+      # Public URL behind app-machine nginx (/grafana/). TLS vs local set in .env.observability.
+      GF_SERVER_ROOT_URL: ${GF_SERVER_ROOT_URL:-http://watch.localhost:3000/grafana/}
+      GF_SERVER_SERVE_FROM_SUB_PATH: "true"
+    volumes:
+      - ./observability/grafana/provisioning:/etc/grafana/provisioning:ro
+      - grafana_data:/var/lib/grafana
+
+volumes:
+  langfuse_postgres_data:
+  langfuse_clickhouse_data:
+  langfuse_clickhouse_logs:
+  langfuse_minio_data:
+  langfuse_redis_data:
+  prometheus_data:
+  grafana_data:

@@ -1,5 +1,9 @@
 import { PrincipalType, PrincipalModel } from 'librechat-data-provider';
-import { logger, BASE_CONFIG_PRINCIPAL_ID } from '@librechat/data-schemas';
+import {
+  logger,
+  BASE_CONFIG_PRINCIPAL_ID,
+  isConfigRevisionConflict,
+} from '@librechat/data-schemas';
 import type {
   TCustomConfig,
   TLangfuseConnectionStatus,
@@ -8,24 +12,26 @@ import type {
   TLangfuseConnectionTestRequest,
   TLangfuseConnectionTestResponse,
   TLangfuseSessionLinkResponse,
+  TLangfuseUnavailableResponse,
 } from 'librechat-data-provider';
-import type { IConfig, MessageMethods } from '@librechat/data-schemas';
-import type { Types, ClientSession } from 'mongoose';
+import type { ConfigRecord, MessageMethods } from '@librechat/data-schemas';
 import type { Response } from 'express';
 import type { LangfuseTenantDestination } from '~/langfuse/tenantDestinations';
 import type { ServerRequest } from '~/types/http';
+import type { RecordAuditEntry } from './audit';
 import {
   getLangfuseTenantDestinations,
   resolveLangfuseTenantDestination,
 } from '~/langfuse/tenantDestinations';
 import { redirectPolicyFor, resolveLangfuseHeaders } from '~/langfuse/utils';
 import { decryptConfigSecret, encryptConfigSecretFields } from './secrets';
+import { getLangfuseConnectionAvailability } from '~/langfuse/policy';
 import { scopeHeadersToDestination } from '~/langfuse/destinations';
-import { isLangfuseConnectionAvailable } from '~/langfuse/policy';
 import { resolveLangfuseSession } from '~/langfuse/session';
+import { getSafeErrorMetadata } from '~/utils/errors';
+import { createAdminAuditEmitter } from './audit';
 import { mergeHeaders } from '~/utils/headers';
 
-const DEFAULT_PRIORITY = 10;
 const ENCRYPTED_PREFIX = 'v3:';
 const LANGFUSE_VERIFICATION_TIMEOUT_MS = 10_000;
 
@@ -46,33 +52,37 @@ export interface LangfuseConnectionEvent {
   destination?: string;
   change: LangfuseConnectionChange;
   changes: LangfuseConnectionChange[];
-  verification_result: 'skipped' | 'success';
+  verification_result: 'skipped' | 'success' | 'failed';
 }
 
 export interface AdminLangfuseDeps {
   findConfigByPrincipal: (
     principalType: PrincipalType,
-    principalId: string | Types.ObjectId,
+    principalId: string,
     options?: { includeInactive?: boolean },
-    session?: ClientSession,
-  ) => Promise<IConfig | null>;
+  ) => Promise<ConfigRecord | null>;
+  /**
+   * Sets the fields in one compare-and-swap write, re-reading on a concurrent change. An
+   * omitted priority keeps the stored one (Base merges first whatever its priority).
+   */
   patchConfigFields: (
     principalType: PrincipalType,
-    principalId: string | Types.ObjectId,
+    principalId: string,
     principalModel: PrincipalModel,
     fields: Record<string, unknown>,
-    priority: number,
-    session?: ClientSession,
-  ) => Promise<IConfig | null>;
+    priority?: number,
+  ) => Promise<ConfigRecord | null>;
   toggleConfigActive: (
     principalType: PrincipalType,
-    principalId: string | Types.ObjectId,
+    principalId: string,
     isActive: boolean,
-    session?: ClientSession,
-  ) => Promise<IConfig | null>;
+  ) => Promise<ConfigRecord | null>;
   getMessages: MessageMethods['getMessages'];
   invalidateConfigCaches?: (tenantId?: string) => Promise<void>;
   recordConnectionUpdate?: (event: LangfuseConnectionEvent) => void;
+  /** Optional audit emission for connection updates; fail-open unless `auditFailClosed`. */
+  recordAuditEntry?: RecordAuditEntry;
+  auditFailClosed?: boolean;
 }
 
 function getTenantId(req: ServerRequest): string | undefined {
@@ -82,12 +92,12 @@ function getTenantId(req: ServerRequest): string | undefined {
 /** Reads from the stored override tree, so this is `TCustomConfig`'s
  *  `DeepPartial` view of the section rather than the standalone
  *  `LangfuseConfig` — record-valued fields carry optional values here. */
-function readStoredLangfuse(config: IConfig | null): TCustomConfig['langfuse'] {
+function readStoredLangfuse(config: ConfigRecord | null): TCustomConfig['langfuse'] {
   const overrides = config?.overrides as Partial<TCustomConfig> | undefined;
   return overrides?.langfuse;
 }
 
-function buildStatus(config: IConfig | null): TLangfuseConnectionStatus {
+function buildStatus(config: ConfigRecord | null): TLangfuseConnectionStatus {
   const stored = readStoredLangfuse(config);
   const configured = Boolean(stored?.publicKey && stored?.secretKey);
   return {
@@ -128,12 +138,22 @@ function getConnectionChanges(
   return change ? [change, ...additionalChanges] : ['updated'];
 }
 
+/**
+ * 404 on a deployment that offers no Langfuse connection, with the reason (`tracing_disabled`,
+ * `env_credentials`, `fanout_disabled`, `tenant_export_disabled`): every route here is behind the
+ * Langfuse capability, so only its holders learn why.
+ */
 function rejectWhenConnectionUnavailable(res: Response): Response | undefined {
-  if (isLangfuseConnectionAvailable()) {
+  const availability = getLangfuseConnectionAvailability();
+  if (availability.available) {
     return undefined;
   }
-
-  return res.status(404).json({ error: 'Langfuse connection settings are not available' });
+  const body: TLangfuseUnavailableResponse = {
+    error: 'Langfuse connection settings are not available',
+    code: 'LANGFUSE_UNAVAILABLE',
+    reason: availability.reason,
+  };
+  return res.status(404).json(body);
 }
 
 type LangfuseVerificationFailure = {
@@ -294,9 +314,16 @@ export function createAdminLangfuseHandlers(deps: AdminLangfuseDeps): {
     invalidateConfigCaches,
     recordConnectionUpdate = (event) =>
       logger.info({ message: '[adminLangfuse] Connection updated', ...event }),
+    recordAuditEntry,
+    auditFailClosed,
   } = deps;
+  const emitAudit = createAdminAuditEmitter({
+    recordAuditEntry,
+    failClosed: auditFailClosed,
+    logPrefix: '[adminLangfuse]',
+  });
 
-  function findBaseConfig(options?: { includeInactive?: boolean }): Promise<IConfig | null> {
+  function findBaseConfig(options?: { includeInactive?: boolean }): Promise<ConfigRecord | null> {
     return options
       ? findConfigByPrincipal(PrincipalType.ROLE, BASE_CONFIG_PRINCIPAL_ID, options)
       : findConfigByPrincipal(PrincipalType.ROLE, BASE_CONFIG_PRINCIPAL_ID);
@@ -441,10 +468,26 @@ export function createAdminLangfuseHandlers(deps: AdminLangfuseDeps): {
         BASE_CONFIG_PRINCIPAL_ID,
         PrincipalModel.ROLE,
         encryptConfigSecretFields(fields),
-        existing?.priority ?? DEFAULT_PRIORITY,
       );
+      /** The patch has committed by now, so a failed activation must not skip the cache
+       * invalidation or the audit entry; it is rethrown once both have started. */
+      let activationError: unknown;
       if (updated?.isActive === false) {
-        updated = await toggleConfigActive(PrincipalType.ROLE, BASE_CONFIG_PRINCIPAL_ID, true);
+        try {
+          const activated = await toggleConfigActive(
+            PrincipalType.ROLE,
+            BASE_CONFIG_PRINCIPAL_ID,
+            true,
+          );
+          if (activated) {
+            updated = activated;
+          } else {
+            /** A null result means the config vanished meanwhile (a concurrent delete). */
+            activationError = new Error('Langfuse base config no longer exists');
+          }
+        } catch (error) {
+          activationError = error;
+        }
       }
 
       const status = buildStatus(updated ?? existing);
@@ -455,23 +498,56 @@ export function createAdminLangfuseHandlers(deps: AdminLangfuseDeps): {
         publicKey,
         secretKey,
       );
+      let verificationResult: LangfuseConnectionEvent['verification_result'] = 'skipped';
+      if (activationError) {
+        verificationResult = 'failed';
+      } else if (connectionChanged) {
+        verificationResult = 'success';
+      }
       recordConnectionUpdate({
         event_name: 'librechat.langfuse.connection.changed',
         tenant_id: getTenantId(req),
         configured: status.configured,
-        enabled: status.enabled,
+        enabled: activationError ? false : status.enabled,
         destination: status.destination,
         change: changes[0],
         changes,
-        verification_result: connectionChanged ? 'success' : 'skipped',
+        verification_result: verificationResult,
+      });
+      /** Settled before responding, so the caller's next read sees the update. */
+      try {
+        await invalidateConfigCaches?.(getTenantId(req));
+      } catch (err) {
+        logger.error(
+          '[adminLangfuse] Cache invalidation failed after update:',
+          getSafeErrorMetadata(err),
+        );
+      }
+
+      /** Recorded after the cache invalidation so audit latency never delays it. Records which parts changed, never the keys themselves. */
+      await emitAudit(req, {
+        action: 'langfuse.updated',
+        severity: 'warning',
+        target: { type: 'langfuse', id: 'connection' },
+        metadata: {
+          changes: [...changes].sort().join(','),
+          enabled: activationError ? false : status.enabled,
+          ...(activationError ? { activation: 'failed' } : {}),
+          ...(status.destination ? { destination: status.destination } : {}),
+        },
       });
 
-      invalidateConfigCaches?.(getTenantId(req))?.catch((err) =>
-        logger.error('[adminLangfuse] Cache invalidation failed after update:', err),
-      );
-
+      if (activationError) {
+        throw activationError;
+      }
       return res.status(200).json(status);
     } catch (error) {
+      if (isConfigRevisionConflict(error)) {
+        return res.status(409).json({
+          error: 'Config was modified by another request',
+          code: 'CONFIG_VERSION_CONFLICT',
+        });
+      }
       logger.error('[adminLangfuse] updateConnection error:', error);
       return res.status(500).json({ error: 'Failed to update Langfuse connection' });
     }

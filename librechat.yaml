@@ -142,7 +142,7 @@ cache: true
 
 # Custom interface configuration
 interface:
-  customWelcome: 'Welcome to Infobhan AI! Enjoy your experience.'
+  customWelcome: 'Welcome to Infobhan AI! Enjoy your chat experience.'
   # Minimum interval between syntax-highlighting passes while streamed code changes (default: 300 ms)
   # codeHighlightThrottleMs: 300
   # Enable/disable file search as a chatarea selection (default: true)
@@ -212,6 +212,7 @@ interface:
     create: true
     share: false
     public: false
+  
   # Scheduled chats are experimental and disabled unless explicitly enabled.
   # A deployment with Redis-backed resumable streams can run this on every replica.
   # A single-process deployment without Redis must also set
@@ -576,6 +577,18 @@ actions:
 #       - -y
 #       - "mcp-obsidian"
 #       - /path/to/obsidian/vault
+
+#Force every user onto free chat
+modelSpecs:
+  list:
+    - name: "infobhan-local-free"
+      label: "Infobhan Local"
+      description: "Free on-prem chat"
+      default: true
+      group: "Infobhan (Local)"
+      preset:
+        endpoint: "Infobhan (Local)"
+        model: "ministral-3:3b"
 
 # Definition of custom endpoints
 endpoints:
@@ -1095,7 +1108,7 @@ endpoints:
       modelDisplayLabel: "Ollama"
       # Zero rates keep on-prem models free and usable after the $2 paid balance is spent.
       # prompt/completion are dollars per million tokens. context must match
-      # OLLAMA_CONTEXT_LENGTH in docker-compose.override.yml (32768).
+      # OLLAMA_CONTEXT_LENGTH in docker-compose.infobhan.yml (32768).
       tokenConfig:
         "ministral-3:3b":
           prompt: 0
